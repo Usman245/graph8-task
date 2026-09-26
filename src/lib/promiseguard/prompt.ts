@@ -2,7 +2,7 @@
 // Plain module (no aliases, no server-only) so setup scripts can import it directly.
 // The template uses Graph8 single-brace variables; it must contain no other braces.
 
-export const PROMPT_VERSION = "pg-v2" as const;
+export const PROMPT_VERSION = "pg-v3" as const;
 /** Graph8 skills default to max_tokens 1000 (verified), which truncates larger reports. */
 export const MAX_OUTPUT_TOKENS = 4000;
 export const SKILL_NAME = "PromiseGuard Compare v1";
@@ -23,6 +23,8 @@ Each sales document has a speaker_side of seller, buyer, or unknown. Only seller
 Preserve speaker attribution, dates, conditions, numbers, and units.
 If speaker attribution is uncertain, use needs_review.
 A statement whose speaker_side is unknown that reads like a commitment must be reported with coverage needs_review; do not omit it.
+Each sales document has a source_type. An internal deal note is written by the seller's team and may also report what the buyer asked or said; only commitments the seller made count as promises.
+A deal memory item is an AI summary of a meeting, not a verbatim quote; say so in the reason, and use needs_review unless its speaker_side is seller.
 Use only the supplied documents.
 
 For each supported commitment:

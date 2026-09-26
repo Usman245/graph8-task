@@ -1,5 +1,6 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { COVERAGE_LABEL, CoverageBadge, SampleBadge } from "@/components/status";
 import { Badge } from "@/components/ui/badge";
@@ -7,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Drawer } from "@/components/ui/drawer";
 import { formatDate } from "@/components/ui/format";
 import { ApiError, api } from "@/lib/api/client-fetch";
+import type { ReviewQuote } from "@/lib/promiseguard/fixes";
+import { BLOCKING_COVERAGE } from "@/lib/promiseguard/gate-rules";
 import type { ReviewView } from "@/lib/promiseguard/runs";
 import type { Finding } from "@/lib/promiseguard/schemas";
 
@@ -20,12 +23,14 @@ export function FindingDrawer({
   finding,
   onClose,
   onChanged,
+  onRecheck,
 }: {
   reviewTaskId: string;
   view: ReviewView;
   finding: Finding | null;
   onClose: () => void;
   onChanged: () => void;
+  onRecheck: () => void;
 }) {
   return (
     <Drawer
@@ -39,7 +44,14 @@ export function FindingDrawer({
         )
       }
     >
-      {finding && <FindingBody key={finding.id} reviewTaskId={reviewTaskId} view={view} f={finding} onChanged={onChanged} />}
+      {finding && (
+        <>
+          <FindingBody key={finding.id} reviewTaskId={reviewTaskId} view={view} f={finding} onChanged={onChanged} />
+          {BLOCKING_COVERAGE.includes(finding.coverage) && (
+            <FixPanel key={`fix-${finding.id}`} reviewTaskId={reviewTaskId} view={view} f={finding} onChanged={onChanged} onRecheck={onRecheck} />
+          )}
+        </>
+      )}
     </Drawer>
   );
 }
@@ -299,5 +311,178 @@ function FindingBody({ reviewTaskId, view, f, onChanged }: { reviewTaskId: strin
         )}
       </section>
     </div>
+  );
+}
+
+const CONFIRMED_HEADING = "Commitments confirmed in sales conversations";
+
+/** The current terms plus the commitment as a new clause, for the reviewer to edit before saving. */
+function proposedTerms(current: string, f: Finding): string {
+  const line = `- ${f.commitment.trim().replace(/\.$/, "")}${f.conditions.length ? ` (${f.conditions.join("; ")})` : ""}.`;
+  const base = current.replace(/\r\n?/g, "\n").trimEnd();
+  if (base.includes(CONFIRMED_HEADING)) return `${base}\n${line}`;
+  return `${base}${base ? "\n\n" : ""}${CONFIRMED_HEADING}\n${line}`;
+}
+
+function clarificationDraft(f: Finding, quoteLabel: string): string {
+  const said = f.salesEvidence[0]?.excerpt;
+  const quoted = f.quoteEvidence[0]?.excerpt;
+  return [
+    "Hi,",
+    "",
+    `Before you review our quote (${quoteLabel.replace(/^\[PromiseGuard Demo\]\s*/, "")}), one clarification on: ${f.commitment}.`,
+    "",
+    said ? `In our conversation we said: "${said}"` : null,
+    f.coverage === "conflict" && quoted ? `The quote states: "${quoted}"` : "The quote as written does not include this.",
+    "",
+    f.suggestedAction,
+    "",
+    "Could you confirm how you would like us to proceed?",
+  ]
+    .filter((l) => l !== null)
+    .join("\n");
+}
+
+function FixPanel({
+  reviewTaskId,
+  view,
+  f,
+  onChanged,
+  onRecheck,
+}: {
+  reviewTaskId: string;
+  view: ReviewView;
+  f: Finding;
+  onChanged: () => void;
+  onRecheck: () => void;
+}) {
+  const m = view.manifest!;
+  const [panel, setPanel] = useState<"none" | "terms" | "note">("none");
+  const [terms, setTerms] = useState<string | null>(null);
+  const [note, setNote] = useState(() => clarificationDraft(f, m.quoteLabel));
+  const [ackRecall, setAckRecall] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState<"terms" | "note" | null>(null);
+  const quote = useQuery({
+    queryKey: ["review-quote", reviewTaskId],
+    queryFn: () => api<ReviewQuote>(`/api/reviews/${encodeURIComponent(reviewTaskId)}/quote`),
+    enabled: panel === "terms",
+  });
+  const draftTerms = terms ?? (quote.data ? proposedTerms(quote.data.termsContent, f) : "");
+  const url = `/api/reviews/${encodeURIComponent(reviewTaskId)}/findings/${encodeURIComponent(f.id)}/fix`;
+
+  async function submit(body: Record<string, unknown>, kind: "terms" | "note") {
+    setBusy(true);
+    setError(null);
+    try {
+      await api(url, { method: "POST", body: JSON.stringify({ ...body, expectedRevision: m.revision }) });
+      setDone(kind);
+      setPanel("none");
+      onChanged();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "The fix could not be saved.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="mt-6 space-y-3 border-t border-border pt-4 text-sm">
+      <div>
+        <h3 className="font-semibold">Fix it</h3>
+        <p className="text-muted">
+          Either put the promise into the quote, or tell the buyer what the quote actually covers. Both are saved in Graph8
+          {m.mode === "demo" ? " (on the demo deal and its draft quote)" : ""}.
+        </p>
+      </div>
+
+      {done === "terms" && (
+        <div className="space-y-2 rounded-md bg-covered-soft p-3 text-covered">
+          <p>Quote terms updated in Graph8. Run a recheck: the gate clears once a review of the new quote version shows it covered.</p>
+          <Button onClick={onRecheck}>Recheck against the updated quote</Button>
+        </div>
+      )}
+      {done === "note" && (
+        <p className="rounded-md bg-covered-soft p-3 text-covered">
+          Clarification saved as a Graph8 deal note. Send it to the buyer, then record a resolution once they agree.
+        </p>
+      )}
+
+      <div className="flex flex-wrap gap-2">
+        <Button variant={panel === "terms" ? "primary" : "secondary"} onClick={() => setPanel(panel === "terms" ? "none" : "terms")}>
+          Fix in quote
+        </Button>
+        <Button variant={panel === "note" ? "primary" : "secondary"} onClick={() => setPanel(panel === "note" ? "none" : "note")}>
+          Draft buyer clarification
+        </Button>
+      </div>
+
+      {panel === "terms" &&
+        (quote.isPending ? (
+          <div className="h-24 animate-pulse rounded bg-surface-muted" />
+        ) : quote.isError ? (
+          <p className="text-conflict">{quote.error.message}</p>
+        ) : !quote.data.editable ? (
+          <p className="text-conflict">{quote.data.reason}</p>
+        ) : (
+          <form
+            className="space-y-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              submit({ kind: "quote_terms", termsContent: draftTerms, acknowledgeRecall: ackRecall }, "terms");
+            }}
+          >
+            <label htmlFor="fix-terms" className="block font-medium">
+              Quote terms (saved to the Graph8 quote&apos;s terms)
+            </label>
+            {f.coverage === "conflict" && f.quoteEvidence[0] && (
+              <p className="rounded bg-conflict-soft p-2 text-conflict">
+                Also edit or remove the conflicting clause: &ldquo;{f.quoteEvidence[0].excerpt}&rdquo;
+              </p>
+            )}
+            <textarea id="fix-terms" className={fieldClass + " font-mono text-xs"} rows={12} maxLength={20000} value={draftTerms} onChange={(e) => setTerms(e.target.value)} />
+            {quote.data.recallsSentQuote && (
+              <label className="flex items-start gap-2 rounded-md border border-conflict/30 bg-conflict-soft p-2 text-conflict">
+                <input type="checkbox" className="mt-0.5" checked={ackRecall} onChange={(e) => setAckRecall(e.target.checked)} />
+                <span>This quote was already sent. Saving recalls it to draft and voids the buyer&apos;s signing link.</span>
+              </label>
+            )}
+            <p className="text-xs text-muted">Only the terms change. Line items and prices are untouched; adjust pricing in Graph8 if the promise has a cost.</p>
+            <Button type="submit" disabled={busy || (quote.data.recallsSentQuote && !ackRecall)}>
+              {busy ? "Saving…" : "Update quote in Graph8"}
+            </Button>
+          </form>
+        ))}
+
+      {panel === "note" && (
+        <form
+          className="space-y-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            submit({ kind: "clarification_note", content: note }, "note");
+          }}
+        >
+          <label htmlFor="fix-note" className="block font-medium">
+            Clarification for the buyer
+          </label>
+          <textarea id="fix-note" className={fieldClass} rows={10} maxLength={4000} value={note} onChange={(e) => setNote(e.target.value)} />
+          <p className="text-xs text-muted">Saved as a deal note in Graph8 for the rep to send. PromiseGuard never emails the buyer itself.</p>
+          <div className="flex flex-wrap gap-2">
+            <Button type="submit" disabled={busy || note.trim().length < 10}>
+              {busy ? "Saving…" : "Save as Graph8 deal note"}
+            </Button>
+            <Button type="button" variant="secondary" onClick={() => navigator.clipboard?.writeText(note)}>
+              Copy text
+            </Button>
+          </div>
+        </form>
+      )}
+      {error && (
+        <p role="alert" className="text-conflict">
+          {error}
+        </p>
+      )}
+    </section>
   );
 }

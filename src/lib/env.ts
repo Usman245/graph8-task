@@ -19,6 +19,11 @@ const EnvSchema = z.object({
     .enum(["true", "false"])
     .default("true")
     .transform((v) => v === "true"),
+  // Autopilot: public base URL Graph8 can reach (for the webhook) and the shared token in the webhook URL.
+  PROMISEGUARD_PUBLIC_URL: z.url().optional(),
+  PROMISEGUARD_WEBHOOK_TOKEN: z.string().min(24).optional(),
+  // Quiet period after a quote.created / quote.updated event before the automatic review starts.
+  PROMISEGUARD_AUTOPILOT_DELAY_SECONDS: z.coerce.number().int().min(0).max(600).default(15),
   PROMISEGUARD_MAX_SOURCES: intFromEnv(5),
   PROMISEGUARD_MAX_SOURCE_CHARS: intFromEnv(40000),
   PROMISEGUARD_MAX_QUOTE_CHARS: intFromEnv(12000),

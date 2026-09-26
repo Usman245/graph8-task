@@ -5,7 +5,8 @@ import { z } from "zod";
 export const ModeSchema = z.enum(["demo", "live"]);
 export type Mode = z.infer<typeof ModeSchema>;
 
-export const SourceKindSchema = z.enum(["sample", "email", "meeting"]);
+// note = Graph8 deal note (written by the seller's team); memory = Graph8 deal memory (AI summary of meeting reviews).
+export const SourceKindSchema = z.enum(["sample", "email", "meeting", "note", "memory"]);
 export const SourceRefSchema = z.object({ kind: SourceKindSchema, id: z.string().min(1).max(200) }).strict();
 export type SourceRef = z.infer<typeof SourceRefSchema>;
 export const refKey = (r: SourceRef) => `${r.kind}:${r.id}`;

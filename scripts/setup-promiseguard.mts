@@ -8,6 +8,9 @@
 //   skill     comparison LLM skill
 //   workflow  workflow that runs the skill (validated before save)
 //   all       records + skill + workflow
+//   webhook   register the Graph8 webhook (quote.created/updated/sent) that drives Quote Guard autopilot.
+//             Needs PROMISEGUARD_PUBLIC_URL (public https URL of this app) and PROMISEGUARD_WEBHOOK_TOKEN.
+//   webhook:off   deactivate that webhook
 //
 // Reruns reuse existing records (by stored ID, then by name). Nothing is sent: no emails, no quote sends.
 // Non-secret IDs are written to graph8/promiseguard-setup.json.
@@ -40,6 +43,7 @@ type State = {
   skillId?: string;
   modelId?: string;
   workflowId?: string | number;
+  webhookId?: string;
   updatedAt?: string;
   // Legacy single-scenario fields (Acme), migrated into scenarios.acme on load.
   companyId?: number;
@@ -138,7 +142,7 @@ async function scenarioRecords(sc: DemoScenario, st: ScenarioState) {
   for (const q of sc.quotes) {
     const stored = st.quotes[q.key];
     if (stored && (await exists(`/quotes/${stored}`, "read demo quote"))) {
-      await syncDraftTerms(q, stored);
+      await syncDraftTerms(q, stored, sc);
       continue;
     }
     const list = await g8("GET", "/quotes", {
@@ -162,6 +166,7 @@ async function scenarioRecords(sc: DemoScenario, st: ScenarioState) {
           signer_email: sc.contact.work_email,
           signer_name: `${sc.contact.first_name.replace("[PromiseGuard Demo] ", "")} ${sc.contact.last_name}`,
           owner_id: state.ownerUserId,
+          ...demoBilling(sc),
         },
       });
       st.quotes[q.key] = res?.data?.id;
@@ -171,19 +176,38 @@ async function scenarioRecords(sc: DemoScenario, st: ScenarioState) {
   }
 }
 
-/** Keep demo quote text in sync with sample-data.ts. Only drafts are edited; a sent quote is never recalled. */
-async function syncDraftTerms(q: DemoScenario["quotes"][number], quoteId: string) {
+/**
+ * Billing details Graph8 requires before a quote can be previewed or sent (verified 2026-09-26:
+ * QUOTE_BILLING_FIELDS_REQUIRED for billing_email and billing_address). Reserved example addresses only.
+ */
+function demoBilling(sc: DemoScenario) {
+  return {
+    billing_legal_name: sc.company.name,
+    billing_email: sc.contact.work_email,
+    billing_address: `${sc.company.name}, 1 Example Street, Springfield, USA (demo address)`,
+  };
+}
+
+/**
+ * Keep demo quote terms in sync with sample-data.ts (this also restores terms edited by "Fix in quote")
+ * and fill missing billing details. Only drafts are edited; a sent quote is never recalled.
+ */
+async function syncDraftTerms(q: DemoScenario["quotes"][number], quoteId: string, sc: DemoScenario) {
   const current = (await g8("GET", `/quotes/${quoteId}`, { operation: "read demo quote" }))?.data;
-  if (current?.terms_content === q.terms_content) {
-    console.log(`quote ${q.key}: reuse id=${quoteId} (terms unchanged)`);
+  const billing = demoBilling(sc);
+  const patch: Record<string, string> = {};
+  if (current?.terms_content !== q.terms_content) patch.terms_content = q.terms_content;
+  if (!current?.billing_email || !current?.billing_address) Object.assign(patch, billing);
+  if (!Object.keys(patch).length) {
+    console.log(`quote ${q.key}: reuse id=${quoteId} (unchanged)`);
     return;
   }
   if (current?.status !== "draft") {
-    console.log(`quote ${q.key}: reuse id=${quoteId}; terms differ but status is ${current?.status}, not editing`);
+    console.log(`quote ${q.key}: reuse id=${quoteId}; differs but status is ${current?.status}, not editing`);
     return;
   }
-  await g8("PATCH", `/quotes/${quoteId}`, { operation: "update demo draft quote terms", body: { terms_content: q.terms_content } });
-  console.log(`quote ${q.key}: reuse id=${quoteId} (draft terms updated)`);
+  await g8("PATCH", `/quotes/${quoteId}`, { operation: "update demo draft quote", body: patch });
+  console.log(`quote ${q.key}: reuse id=${quoteId} (draft updated: ${Object.keys(patch).join(", ")})`);
 }
 
 async function exists(path: string, operation: string): Promise<boolean> {
@@ -318,9 +342,46 @@ async function workflow() {
   save();
 }
 
+const WEBHOOK_NAME = "PromiseGuard Quote Guard autopilot";
+const WEBHOOK_EVENTS = ["quote.created", "quote.updated", "quote.sent"];
+
+async function webhook(active: boolean) {
+  const list = await g8("GET", "/webhooks", { operation: "list webhooks" });
+  const existing = (list?.data ?? []).find((w: any) => w.name === WEBHOOK_NAME || w.id === state.webhookId);
+  if (!active) {
+    if (!existing) return console.log("webhook: none registered");
+    await g8("PATCH", `/webhooks/${existing.id}`, { operation: "deactivate webhook", body: { is_active: false } });
+    return console.log(`webhook: deactivated ${existing.id}`);
+  }
+
+  const base = process.env.PROMISEGUARD_PUBLIC_URL;
+  const token = process.env.PROMISEGUARD_WEBHOOK_TOKEN;
+  if (!base || !token) {
+    throw new Error(
+      "Set PROMISEGUARD_PUBLIC_URL (the public https URL Graph8 can reach, e.g. a cloudflared or ngrok tunnel to localhost:3000) " +
+        "and PROMISEGUARD_WEBHOOK_TOKEN (node -e \"console.log(require('crypto').randomBytes(32).toString('base64url'))\") first.",
+    );
+  }
+  if (!base.startsWith("https://")) throw new Error("PROMISEGUARD_PUBLIC_URL must be https");
+  const url = `${base.replace(/\/$/, "")}/api/webhooks/graph8?token=${encodeURIComponent(token)}`;
+  const body = { name: WEBHOOK_NAME, url, events: WEBHOOK_EVENTS };
+  if (existing) {
+    await g8("PATCH", `/webhooks/${existing.id}`, { operation: "update webhook", body: { ...body, is_active: true } });
+    state.webhookId = existing.id;
+    console.log(`webhook: updated ${existing.id}`);
+  } else {
+    // The signing secret in the response is not stored; the URL token authenticates deliveries.
+    const res = await g8("POST", "/webhooks", { operation: "create webhook", body });
+    state.webhookId = res?.data?.id;
+    console.log(`webhook: created ${state.webhookId}`);
+  }
+  console.log(`webhook: ${WEBHOOK_EVENTS.join(", ")} -> ${base.replace(/\/$/, "")}/api/webhooks/graph8?token=***`);
+  save();
+}
+
 const steps = process.argv.slice(2);
 if (!steps.length) {
-  console.log("Usage: node scripts/setup-promiseguard.mts users|records|skill|workflow|all");
+  console.log("Usage: node scripts/setup-promiseguard.mts users|records|skill|workflow|all|webhook|webhook:off");
   process.exit(1);
 }
 try {
@@ -330,6 +391,8 @@ try {
     else if (step.startsWith("records:")) await records(step.slice(8));
     else if (step === "skill") await skill();
     else if (step === "workflow") await workflow();
+    else if (step === "webhook") await webhook(true);
+    else if (step === "webhook:off") await webhook(false);
     else if (step === "all") {
       await records();
       await skill();

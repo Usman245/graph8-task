@@ -17,5 +17,6 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!login|api/auth|api/health|_next/static|_next/image|favicon.ico).*)"],
+  // api/webhooks is called by Graph8 (no session); it authenticates with its own URL token.
+  matcher: ["/((?!login|api/auth|api/health|api/webhooks|_next/static|_next/image|favicon.ico).*)"],
 };

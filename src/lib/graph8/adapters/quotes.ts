@@ -25,6 +25,8 @@ const QuoteDto = z.object({
   deal_id: z.string().nullish(),
   mashup_company_id: z.union([z.number(), z.string()]).nullish(),
   signer_email: z.string().nullish(),
+  // Set when the signer is a Graph8 contact (signer_contact_id) rather than a typed email.
+  signer_contact_email: z.string().nullish(),
   company_name: z.string().nullish(),
   currency: z.string().nullish(),
   total: z.number().nullish(),
@@ -93,7 +95,7 @@ function toQuote(q: z.infer<typeof QuoteDto>): QuoteRecord {
     dealId: q.deal_id ?? null,
     companyId: q.mashup_company_id != null ? String(q.mashup_company_id) : null,
     companyName: q.company_name ?? null,
-    signerEmail: q.signer_email?.toLowerCase() ?? null,
+    signerEmail: (q.signer_email ?? q.signer_contact_email)?.toLowerCase() ?? null,
     currency: q.currency ?? null,
     totalMinor: q.total ?? null,
     termsContent: q.terms_content ?? null,
@@ -121,7 +123,7 @@ function toQuote(q: z.infer<typeof QuoteDto>): QuoteRecord {
 }
 
 const ListEnvelope = z.object({
-  data: z.object({ items: z.array(QuoteDto.partial({ line_items: true })), total: z.number().optional() }),
+  data: z.object({ items: z.array(QuoteDto), total: z.number().optional() }),
 });
 
 export async function listQuotesForDeal(dealId: string): Promise<QuoteRecord[]> {
@@ -144,4 +146,39 @@ export async function getQuote(quoteId: string): Promise<QuoteRecord> {
   const operation = "read quote";
   const json = await graph8.get(path`/quotes/${quoteId}`, { operation });
   return toQuote(parseResponse(z.object({ data: QuoteDto }), json, operation).data);
+}
+
+/** Most recent quotes in the workspace (list rows carry deal_id and terms, not line items). */
+export async function listRecentQuotes(limit = 50): Promise<QuoteRecord[]> {
+  const operation = "list quotes";
+  const json = await graph8.get("/quotes", { operation, query: { page: 1, limit } });
+  return parseResponse(ListEnvelope, json, operation).data.items.map(toQuote);
+}
+
+/** Statuses Graph8 refuses to edit or send (PATCH /quotes/{id} rejects terminal quotes). */
+export const TERMINAL_QUOTE_STATUSES = ["accepted", "declined", "voided", "expired", "archived", "superseded"];
+/** PATCH on these recalls the quote to draft and voids its live signing link. */
+export const IN_FLIGHT_QUOTE_STATUSES = ["sent", "viewed"];
+
+const WriteResult = z.object({ data: z.object({ id: z.string().nullish(), status: z.string().nullish() }).passthrough() });
+
+/** PATCH /quotes/{id} with terms_content only. Totals and line items are untouched. */
+export async function updateQuoteTerms(quoteId: string, termsContent: string): Promise<{ status: string | null }> {
+  const operation = "update quote terms";
+  const json = await graph8.patch(path`/quotes/${quoteId}`, { operation, body: { terms_content: termsContent } });
+  return { status: parseResponse(WriteResult, json, operation).data.status ?? null };
+}
+
+/** POST /quotes/{id}/send: e-signature email to the signer. Never retried. */
+export async function sendQuote(quoteId: string, body: { subject?: string; message?: string }): Promise<{ status: string | null }> {
+  const operation = "send quote";
+  const json = await graph8.post(path`/quotes/${quoteId}/send`, { operation, body, timeoutMs: 45_000 });
+  return { status: parseResponse(WriteResult, json, operation).data.status ?? null };
+}
+
+/** POST /quotes/{id}/send-preview: renders exactly what /send would produce and SENDS NOTHING. */
+export async function previewQuoteSend(quoteId: string, body: { subject?: string; message?: string }): Promise<Record<string, unknown>> {
+  const operation = "preview quote send";
+  const json = await graph8.post(path`/quotes/${quoteId}/send-preview`, { operation, body });
+  return parseResponse(z.object({ data: z.record(z.string(), z.unknown()) }), json, operation).data;
 }

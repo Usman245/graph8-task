@@ -44,3 +44,30 @@ export const IssueUpdateBody = z
 export const RecheckBody = z.object({ requestId: z.uuid() }).strict();
 
 export const ModeBody = z.object({ mode: ModeSchema }).strict();
+
+export const ScanBody = z.object({ quoteIds: z.array(z.string().min(1).max(100)).max(10).optional() }).strict();
+
+export const SendBody = z
+  .object({
+    overrideReason: z.string().max(500).optional(),
+    message: z.string().max(2000).optional(),
+  })
+  .strict();
+
+export const FixBody = z.discriminatedUnion("kind", [
+  z
+    .object({
+      kind: z.literal("quote_terms"),
+      termsContent: z.string().max(20_000),
+      acknowledgeRecall: z.boolean(),
+      expectedRevision: z.number().int().nonnegative(),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("clarification_note"),
+      content: z.string().max(4_000),
+      expectedRevision: z.number().int().nonnegative(),
+    })
+    .strict(),
+]);

@@ -28,6 +28,9 @@ export default async function ProtectedLayout({ children }: LayoutProps<"/">) {
               PromiseGuard
             </Link>
             <nav aria-label="Main" className="flex gap-4 text-sm text-muted">
+              <Link href="/guard" className="hover:text-foreground">
+                Quote Guard
+              </Link>
               <Link href="/deals" className="hover:text-foreground">
                 Deals
               </Link>

@@ -115,15 +115,30 @@ async function once(method: string, url: URL, apiKey: string, opts: RequestOptio
   if (!res.ok) {
     const retryAfterHeader = res.headers.get("retry-after");
     const retryAfterMs = retryAfterHeader ? Math.min(Number(retryAfterHeader) * 1000, 10_000) : undefined;
+    const code = codeForStatus(res.status);
     throw new Graph8Error({
-      code: codeForStatus(res.status),
+      code,
       operation: opts.operation,
       status: res.status,
+      // Graph8's own validation text (e.g. "Billing email is required.") tells the user what to fix in Graph8.
+      message: code === "validation" ? validationMessage(json, opts.operation) : undefined,
       // Validation details are useful in setup diagnostics; never includes our credentials.
       details: { retryAfterMs: Number.isFinite(retryAfterMs) ? retryAfterMs : undefined, body: res.status === 422 ? json : undefined },
     });
   }
   return json;
+}
+
+/** Field-level messages from a Graph8 validation error body; never echoes submitted values. */
+function validationMessage(json: unknown, operation: string): string | undefined {
+  const body = (json && typeof json === "object" ? json : {}) as { detail?: unknown; message?: unknown };
+  const detail = (body.detail && typeof body.detail === "object" ? body.detail : {}) as { message?: unknown; fields?: unknown };
+  const fields = Array.isArray(detail.fields)
+    ? detail.fields.map((f) => (f && typeof f === "object" ? (f as { message?: unknown }).message : null)).filter((m): m is string => typeof m === "string")
+    : [];
+  const main = typeof detail.message === "string" ? detail.message : typeof body.message === "string" && body.message !== "validation error" ? body.message : null;
+  const text = [main, ...fields].filter(Boolean).join(" ").slice(0, 400);
+  return text ? `Graph8 rejected the request (${operation}): ${text}` : undefined;
 }
 
 function backoff(attempt: number): number {

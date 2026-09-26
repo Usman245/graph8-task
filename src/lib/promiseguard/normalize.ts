@@ -2,6 +2,8 @@
 // every citation is verified against.
 
 import type { EmailThread, Meeting } from "@/lib/graph8/adapters/inbox";
+import type { DealMemory } from "@/lib/graph8/adapters/memory";
+import type { DealNote } from "@/lib/graph8/adapters/notes";
 import type { QuoteRecord } from "@/lib/graph8/adapters/quotes";
 import { sha256 } from "./hash";
 import type { SampleSource } from "./sample-data";
@@ -133,6 +135,40 @@ export function meetingToDocuments(meeting: Meeting, ctx: SideContext): Evidence
     const side = email ? sideForEmail(email, ctx) : "unknown";
     return doc(`meeting:${meeting.id}:t${i + 1}`, parent, t.lines.join("\n"), t.speaker, side, meeting.startTime, false);
   });
+}
+
+/** Notes PromiseGuard itself writes (clarifications, override logs) are never evidence. */
+export const PROMISEGUARD_NOTE_PREFIX = "[PromiseGuard]";
+export const isPromiseGuardNote = (content: string) => content.trimStart().startsWith(PROMISEGUARD_NOTE_PREFIX);
+
+/**
+ * A deal note is written inside Graph8 by the seller's team, so its author is on the seller side.
+ * The prompt tells the model a note may also report what the buyer said.
+ */
+export function noteToDocuments(note: DealNote): EvidenceDocument[] {
+  const parent: SourceRef = { kind: "note", id: note.id };
+  const text = /<[a-z][\s\S]*>/i.test(note.content) ? htmlToText(note.content) : normalizeText(note.content);
+  if (!text || isPromiseGuardNote(text)) return [];
+  const author = note.authorName ? `${note.authorName} (deal note)` : "Seller team (deal note)";
+  return [doc(`note:${note.id}`, parent, text, author, "seller", note.createdAt, false)];
+}
+
+/** One document per commitment Graph8 extracted from a meeting review. Side is never guessed. */
+export function memoryToDocuments(dealId: string, memory: DealMemory): EvidenceDocument[] {
+  const parent: SourceRef = { kind: "memory", id: dealId };
+  return memory.reviews.flatMap((r) =>
+    r.commitments.map((c, j) =>
+      doc(
+        `memory:${dealId}:${r.id}:c${j + 1}`,
+        parent,
+        c.text,
+        `Graph8 meeting review${r.title ? `: ${r.title}` : ""}${c.owner ? ` (owner: ${c.owner})` : ""}`,
+        c.side,
+        r.occurredAt,
+        false,
+      ),
+    ),
+  );
 }
 
 export function sourceHash(docs: EvidenceDocument[]): string {

@@ -3,15 +3,25 @@ import { AppRequestError } from "@/lib/auth/guard";
 import { env } from "@/lib/env";
 import type { Deal } from "@/lib/graph8/adapters/deals";
 import { getEmailThread, getMeeting, listEmailThreads, listMeetingsForParticipant, type EmailThread } from "@/lib/graph8/adapters/inbox";
+import { getDealMemory } from "@/lib/graph8/adapters/memory";
+import { listDealNotes } from "@/lib/graph8/adapters/notes";
 import { Graph8Error } from "@/lib/graph8/errors";
-import { emailThreadToDocuments, meetingToDocuments, sampleToDocuments, type SideContext } from "./normalize";
+import {
+  emailThreadToDocuments,
+  htmlToText,
+  meetingToDocuments,
+  memoryToDocuments,
+  noteToDocuments,
+  sampleToDocuments,
+  type SideContext,
+} from "./normalize";
 import { SAMPLE_LABEL, SAMPLE_SELLER_DOMAIN, SAMPLE_SOURCES, type SampleSource } from "./sample-data";
 import type { EvidenceDocument, Mode, SourceRef } from "./schemas";
 
 export type SourceCandidate = {
   ref: SourceRef;
   kind: SourceRef["kind"];
-  /** "Sample conversation", "Graph8 email", or "Graph8 meeting transcript". */
+  /** "Sample conversation", "Graph8 email", "Graph8 meeting transcript", "Graph8 deal note", or "Graph8 deal memory". */
   originLabel: string;
   title: string;
   occurredAt: string | null;
@@ -83,8 +93,14 @@ export async function findSourceCandidates(deal: Deal, mode: Mode): Promise<Cand
   const candidates: SourceCandidate[] = [];
   const coverage: string[] = [];
   const errors: string[] = [];
+
+  // Deal notes and deal memory are attached to the deal itself, so they need no contact matching.
+  await scanDealRecords(deal, candidates, coverage, errors);
+
   if (!emails.length) {
-    return { candidates, coverage: ["This deal has no contact email addresses, so no sources can be matched."], errors };
+    coverage.push("This deal has no contact email addresses, so no emails or meetings can be matched.");
+    candidates.sort((a, b) => (b.occurredAt ?? "").localeCompare(a.occurredAt ?? ""));
+    return { candidates, coverage, errors };
   }
 
   // Email: bounded scan of recent inbox pages, matched on exact participant addresses only.
@@ -154,10 +170,67 @@ export async function findSourceCandidates(deal: Deal, mode: Mode): Promise<Cand
     }
   }
   if (emails.length > MAX_CONTACTS_SCANNED) coverage.push(`Meetings: checked the first ${MAX_CONTACTS_SCANNED} deal contacts only.`);
-  coverage.push("Only sources with an exact contact email match are listed. Nothing is matched on names alone.");
+  coverage.push("Emails and meetings are listed only with an exact contact email match. Nothing is matched on names alone.");
 
   candidates.sort((a, b) => (b.occurredAt ?? "").localeCompare(a.occurredAt ?? ""));
   return { candidates, coverage, errors };
+}
+
+async function scanDealRecords(deal: Deal, candidates: SourceCandidate[], coverage: string[], errors: string[]) {
+  try {
+    const notes = (await listDealNotes(deal.id)).filter((n) => noteToDocuments(n).length > 0);
+    for (const n of notes) {
+      candidates.push({
+        ref: { kind: "note", id: n.id },
+        kind: "note",
+        originLabel: "Graph8 deal note",
+        title: noteTitle(n.content),
+        occurredAt: n.createdAt,
+        participants: n.authorName ? [n.authorName] : [],
+        matchedContacts: ["attached to this deal"],
+        textAvailable: true,
+        unavailableReason: null,
+        synthetic: false,
+      });
+    }
+    coverage.push(`Deal notes: ${notes.length} note(s) on this deal (PromiseGuard's own notes are excluded).`);
+  } catch (err) {
+    if (!(err instanceof Graph8Error)) throw err;
+    errors.push(`Deal notes could not be read: ${err.message}`);
+  }
+
+  try {
+    const memory = await getDealMemory(deal.id);
+    const count = memory.reviews.reduce((n, r) => n + r.commitments.length, 0);
+    if (count > 0) {
+      const latest = memory.reviews.map((r) => r.occurredAt).filter(Boolean).sort().at(-1) ?? null;
+      candidates.push({
+        ref: { kind: "memory", id: deal.id },
+        kind: "memory",
+        originLabel: "Graph8 deal memory",
+        title: `Commitments from ${memory.reviews.length} meeting review(s) (${count} item(s))`,
+        occurredAt: latest,
+        participants: [],
+        matchedContacts: ["attached to this deal"],
+        textAvailable: true,
+        unavailableReason: null,
+        synthetic: false,
+      });
+    }
+    coverage.push(
+      count > 0
+        ? `Deal memory: ${count} commitment(s) Graph8 extracted from ${memory.reviewCount} meeting review(s). These are AI summaries, not verbatim quotes.`
+        : `Deal memory: Graph8 has ${memory.reviewCount} meeting review(s) for this deal and no extracted commitments.`,
+    );
+  } catch (err) {
+    if (!(err instanceof Graph8Error)) throw err;
+    errors.push(`Deal memory could not be read: ${err.message}`);
+  }
+}
+
+function noteTitle(content: string): string {
+  const first = (/<[a-z][\s\S]*>/i.test(content) ? htmlToText(content) : content).split("\n").find((l) => l.trim()) ?? "";
+  return `Deal note: ${first.trim().slice(0, 80)}${first.trim().length > 80 ? "…" : ""}`;
 }
 
 export type LoadedSource = { ref: SourceRef; label: string; documents: EvidenceDocument[] };
@@ -177,6 +250,22 @@ export async function loadSource(deal: Deal, ref: SourceRef, mode: Mode): Promis
   }
 
   if (mode !== "live") throw new AppRequestError("live_in_demo", "Demo mode uses only the sample conversation.", 409);
+
+  if (ref.kind === "note") {
+    // Listed through the deal, so a note from another deal can never be loaded by ID.
+    const note = (await listDealNotes(deal.id)).find((n) => n.id === ref.id);
+    if (!note) throw new AppRequestError("source_unrelated", "This note is not attached to the deal.", 409);
+    const documents = noteToDocuments(note);
+    if (!documents.length) throw new AppRequestError("source_empty", "This note has no usable text.", 422);
+    return { ref, label: `Graph8 deal note${note.authorName ? ` by ${note.authorName}` : ""}`, documents };
+  }
+
+  if (ref.kind === "memory") {
+    if (ref.id !== deal.id) throw new AppRequestError("source_unrelated", "Deal memory belongs to a different deal.", 409);
+    const documents = memoryToDocuments(deal.id, await getDealMemory(deal.id));
+    if (!documents.length) throw new AppRequestError("source_empty", "Graph8 has no extracted commitments for this deal.", 422);
+    return { ref, label: "Graph8 deal memory (AI summary of meeting reviews)", documents };
+  }
 
   if (ref.kind === "email") {
     const thread = await getEmailThread(ref.id);

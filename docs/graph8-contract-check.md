@@ -70,3 +70,22 @@ Planned graph (to validate with `POST /workflows/validate`): `trigger(tool_call)
 - Skill create/validate, workflow validate/save/execute, execution result nesting.
 - Task create with `entity_type=deal`, description round-trip size, `parent_task_id`/subtasks.
 - Required scopes per operation.
+
+## Verified for Quote Guard (2026-09-26, live calls from the app)
+
+| Capability | Endpoint | Observed |
+|---|---|---|
+| Deal notes | `GET /deals/{id}/notes` | `{ data: Note[], pagination: null }`; Note has `id, content, created_by_name, created_at` |
+| Create note | `POST /deals/{id}/notes` `{ content }` | `{ data: Note }` |
+| Deal memory | `GET /deals/{id}/memory` | `{ data: { deal_id, review_count, average_score, reviews: [] } }`. Review items are an open shape; not yet observed with meetings |
+| Webhooks | `GET /webhooks` | `{ data: Webhook[] }`. `POST` returns the signing secret once; the signing header scheme is undocumented |
+| Webhook events | `GET /webhooks/events` | includes `quote.created`, `quote.updated`, `quote.sent`, `quote.resent`, `deal.stage_changed` |
+| Quote terms edit | `PATCH /quotes/{id}` `{ terms_content }` | draft edited in place; `sent`/`viewed` are recalled to draft (voids signing link) per OpenAPI |
+| Send preview | `POST /quotes/{id}/send-preview` | renders subject and recipient, sends nothing. 422 `QUOTE_BILLING_FIELDS_REQUIRED` until `billing_email` and `billing_address` are set |
+| Quote list | `GET /quotes?page=1&limit=100` | `{ data: { items, total } }`; rows include `deal_id`, `terms_content`, `signer_contact_email` (not line items) |
+| Quote signer | `GET /quotes/{id}` | a contact signer has `signer_email: null` and `signer_contact_email` set |
+| Deal create | `POST /deals` | requires `contact_ids`; 409 if the company already has a deal unless `allow_duplicate: true` |
+| Quote create | `POST /quotes` | requires `contract_start_date` and a recipient (`signer_contact_id` or `signer_email` + `signer_name`) |
+
+Not exercised: `POST /quotes/{id}/send` (the live send). It was only reached through the gate's refusal path, since no real
+buyer was available to receive a quote.

@@ -4,11 +4,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { COVERAGE_LABEL, CoverageBadge, EmptyPanel, ErrorPanel, ModeBadge, SampleBadge } from "@/components/status";
+import { SendDialog, gateKey } from "@/components/guard/send-dialog";
+import { COVERAGE_LABEL, CoverageBadge, EmptyPanel, ErrorPanel, GateBadge, ModeBadge, SampleBadge } from "@/components/status";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatDate } from "@/components/ui/format";
 import { ApiError, api } from "@/lib/api/client-fetch";
+import type { QuoteGateDetail } from "@/lib/promiseguard/guard";
 import type { FinalizeResult, ReviewView } from "@/lib/promiseguard/runs";
 import type { Finding } from "@/lib/promiseguard/schemas";
 import { FindingDrawer } from "./finding-drawer";
@@ -161,6 +163,8 @@ export function ReviewWorkspace({ reviewTaskId }: { reviewTaskId: string }) {
 
       {m.runState === "completed" && (
         <>
+          <SendGateBar quoteId={m.quoteId} reviewTaskId={reviewTaskId} />
+          <MainFinding view={view} onOpen={setOpenFinding} />
           <section aria-label="Summary" className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {(["conflict", "missing", "needs_review", "covered"] as const).map((k) => (
               <div key={k} className="rounded-lg border border-border bg-surface p-4">
@@ -218,9 +222,113 @@ export function ReviewWorkspace({ reviewTaskId }: { reviewTaskId: string }) {
         view={view}
         finding={selectedFinding}
         onClose={() => setOpenFinding(null)}
-        onChanged={() => qc.invalidateQueries({ queryKey: key })}
+        onChanged={() => {
+          qc.invalidateQueries({ queryKey: key });
+          qc.invalidateQueries({ queryKey: gateKey(m.quoteId) });
+        }}
+        onRecheck={recheck}
       />
     </div>
+  );
+}
+
+/** Send-gate state for this review's quote (based on the quote's latest review, which may be newer than this one). */
+function SendGateBar({ quoteId, reviewTaskId }: { quoteId: string; reviewTaskId: string }) {
+  const [open, setOpen] = useState(false);
+  const gate = useQuery({
+    queryKey: gateKey(quoteId),
+    queryFn: () => api<QuoteGateDetail>(`/api/quotes/${encodeURIComponent(quoteId)}/gate`),
+  });
+  const d = gate.data;
+  const newer = d?.gate.reviewTaskId && d.gate.reviewTaskId !== reviewTaskId ? d.gate.reviewTaskId : null;
+  return (
+    <section aria-label="Send gate" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface px-4 py-3">
+      <div className="space-y-0.5 text-sm">
+        <p className="flex flex-wrap items-center gap-2">
+          <span className="font-medium">Quote Guard</span>
+          {d ? <GateBadge state={d.gate.state} /> : gate.isError ? <Badge>Unavailable</Badge> : <Badge>Checking…</Badge>}
+        </p>
+        {d?.gate.reasons[0] && <p className="text-muted">{d.gate.reasons[0]}</p>}
+        {newer && (
+          <p className="text-muted">
+            Based on a newer review:{" "}
+            <Link className="text-primary hover:underline" href={`/reviews/${encodeURIComponent(newer)}`}>
+              open it
+            </Link>
+          </p>
+        )}
+      </div>
+      <Button variant={d?.gate.state === "clear" ? "primary" : "secondary"} disabled={!d || d.gate.state === "closed"} onClick={() => setOpen(true)}>
+        Send quote…
+      </Button>
+      {open && <SendDialog quoteId={quoteId} open onClose={() => setOpen(false)} />}
+    </section>
+  );
+}
+
+/** The most important finding, stated plainly: first conflict, otherwise first missing item. */
+function MainFinding({ view, onOpen }: { view: ReviewView; onOpen: (id: string) => void }) {
+  const m = view.manifest!;
+  const report = m.report ?? [];
+  const main = report.find((f) => f.coverage === "conflict") ?? report.find((f) => f.coverage === "missing");
+  if (!main) return null;
+  const isConflict = main.coverage === "conflict";
+  const sales = main.salesEvidence[0];
+  const doc = sales ? m.documents[sales.documentId] : undefined;
+  const quote = main.quoteEvidence[0];
+  const others = report.filter((f) => f.coverage === main.coverage).length - 1;
+
+  return (
+    <section
+      aria-labelledby="main-finding-h"
+      className={`rounded-xl border-2 p-5 ${isConflict ? "border-conflict/40 bg-conflict-soft" : "border-missing/40 bg-missing-soft"}`}
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <CoverageBadge coverage={main.coverage} />
+        <h2 id="main-finding-h" className="text-lg font-semibold">
+          {isConflict ? "Main conflict" : "Main gap"}: {main.commitment}
+        </h2>
+      </div>
+
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
+        <figure className="rounded-lg bg-surface p-4">
+          <figcaption className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted">
+            Sales promised
+            {doc?.synthetic && <SampleBadge />}
+          </figcaption>
+          <blockquote className="mt-2 whitespace-pre-wrap">&ldquo;{sales?.excerpt}&rdquo;</blockquote>
+          <p className="mt-2 text-xs text-muted">
+            {doc?.speaker ?? "Unknown speaker"} · {doc?.source ?? "Unknown source"}
+            {doc?.synthetic ? " (synthetic sample, not a Graph8 record)" : ""}
+          </p>
+        </figure>
+        <figure className="rounded-lg bg-surface p-4">
+          <figcaption className="text-xs font-semibold uppercase tracking-wide text-muted">
+            {isConflict ? "But the quote says" : "The quote says"}
+          </figcaption>
+          <blockquote className="mt-2 whitespace-pre-wrap">
+            {quote ? <>&ldquo;{quote.excerpt}&rdquo;</> : <span className="text-muted">Nothing. No clause in the quote covers this.</span>}
+          </blockquote>
+          <p className="mt-2 text-xs text-muted">{m.quoteLabel}</p>
+        </figure>
+      </div>
+
+      <div className="mt-4 rounded-lg bg-surface p-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted">Suggested action</p>
+        <p className="mt-1">{main.suggestedAction}</p>
+        {main.conditions.length > 0 && <p className="mt-1 text-sm text-muted">Condition: {main.conditions.join("; ")}</p>}
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <Button onClick={() => onOpen(main.id)}>View evidence and assign</Button>
+        {others > 0 && (
+          <span className="text-sm text-muted">
+            {others} more {isConflict ? "conflict" : "missing item"}
+            {others === 1 ? "" : "s"} in the table below.
+          </span>
+        )}
+      </div>
+    </section>
   );
 }
 

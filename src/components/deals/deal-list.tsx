@@ -96,9 +96,9 @@ export function DealList({ mode }: { mode: Mode }) {
                   <td className="px-4 py-3 text-right">
                     <Link
                       href={`/deals/${encodeURIComponent(d.id)}`}
-                      className="inline-flex rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-hover"
+                      className="inline-flex whitespace-nowrap rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-hover"
                     >
-                      Review quote
+                      Check promises against quote
                     </Link>
                   </td>
                 </tr>

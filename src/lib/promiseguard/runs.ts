@@ -62,6 +62,14 @@ async function prepareEvidence(deal: Deal, quoteId: string, refs: SourceRef[], m
   return { deal, quoteDoc, sources, documents };
 }
 
+const SOURCE_TYPE: Record<SourceRef["kind"], string> = {
+  sample: "sample conversation",
+  email: "email",
+  meeting: "meeting transcript",
+  note: "internal deal note",
+  memory: "deal memory (AI summary of a meeting)",
+};
+
 function buildInputData(requestId: string, mode: Mode, ev: Evidence): Record<string, string> {
   const labels = new Map(ev.sources.map((s) => [refKey(s.ref), s.label]));
   return {
@@ -71,12 +79,13 @@ function buildInputData(requestId: string, mode: Mode, ev: Evidence): Record<str
       max_findings: env().PROMISEGUARD_MAX_FINDINGS,
       review_date: new Date().toISOString().slice(0, 10),
       deal_name: ev.deal.name,
-      evidence_origin: mode === "demo" ? "synthetic sample conversation for demonstration" : "Graph8 email and meeting records",
+      evidence_origin: mode === "demo" ? "synthetic sample conversation for demonstration" : "Graph8 email, meeting, deal note, and deal memory records",
       quote_text_complete: ev.quoteDoc.textComplete,
     }),
     sources_json: JSON.stringify(
       ev.documents.map((d) => ({
         document_id: d.id,
+        source_type: SOURCE_TYPE[d.parent.kind],
         source: labels.get(refKey(d.parent)) ?? refKey(d.parent),
         speaker: d.speaker,
         speaker_side: d.speakerSide,
@@ -395,13 +404,13 @@ export async function getReviewView(taskId: string, opts: { checkFreshness?: boo
   };
 }
 
-function findFinding(m: ReviewManifest, findingId: string): Finding {
+export function findFinding(m: ReviewManifest, findingId: string): Finding {
   const f = m.report?.find((x) => x.id === findingId);
   if (!f) throw new AppRequestError("finding_not_found", "This finding is not part of the review.", 404);
   return f;
 }
 
-function checkRevision(m: ReviewManifest, expected: number) {
+export function checkRevision(m: ReviewManifest, expected: number) {
   if (m.revision !== expected) {
     throw new AppRequestError("stale_revision", "This review changed since you loaded it. Refresh and try again.", 409);
   }

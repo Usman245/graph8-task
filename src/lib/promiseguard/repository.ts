@@ -4,7 +4,8 @@ import { env } from "@/lib/env";
 import { createTask, getTask, listDealTasks, patchTask, type Task } from "@/lib/graph8/adapters/tasks";
 import { Graph8Error } from "@/lib/graph8/errors";
 import { REVIEW_TAG, buildDescription, manifestBytes, parseDescription, reviewTitle } from "./manifest";
-import { summarize, type ReviewManifest, type SummaryCounts } from "./schemas";
+import { openFindings } from "./gate-rules";
+import { refKey, summarize, type ReviewManifest, type SummaryCounts } from "./schemas";
 
 export type LoadedReview = { task: Task; manifest: ReviewManifest | null; readOnlyReason: string | null };
 
@@ -89,7 +90,16 @@ export type ReviewSummary = {
   sourceCount: number;
   createdAt: string | null;
   counts: SummaryCounts | null;
+  /** False when findings were rejected, truncated, or the quote text was incomplete. */
+  coverageComplete: boolean | null;
   readOnly: boolean;
+  quoteId: string | null;
+  /** Content hash of the quote version that was reviewed. */
+  quoteHash: string | null;
+  sourceKeys: string[];
+  /** Blocking findings not yet dismissed or resolved (null until the report exists). */
+  open: number | null;
+  runError: string | null;
 };
 
 export async function listReviewSummaries(dealId: string): Promise<{ items: ReviewSummary[]; partial: boolean }> {
@@ -109,7 +119,13 @@ export async function listReviewSummaries(dealId: string): Promise<{ items: Revi
       sourceCount: m?.sourceRefs.length ?? 0,
       createdAt: m?.createdAt ?? task.createdAt,
       counts: m?.report ? summarize(m.report) : null,
+      coverageComplete: m?.report ? m.coverageComplete : null,
       readOnly: !m,
+      quoteId: m?.quoteId ?? null,
+      quoteHash: m?.quoteHash ?? null,
+      sourceKeys: m ? m.sourceRefs.map(refKey).sort() : [],
+      open: m?.report ? openFindings(m).length : null,
+      runError: m?.runError?.message ?? null,
     });
   }
   items.sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
