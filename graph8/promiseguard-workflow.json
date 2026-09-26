@@ -1,0 +1,122 @@
+{
+  "start_node_id": "trigger_1",
+  "metadata": {
+    "name": "PromiseGuard Compare Workflow v1",
+    "version": 1
+  },
+  "settings": {
+    "stop_on_failure": true
+  },
+  "nodes": [
+    {
+      "node_id": "trigger_1",
+      "node_type": "trigger",
+      "name": "Run comparison on request",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "connections": [
+        "compare_1"
+      ],
+      "config": {
+        "trigger_type": "tool_call",
+        "input_schema": [
+          {
+            "name": "context_json",
+            "type": "string",
+            "required": true,
+            "description": "Serialized context JSON"
+          },
+          {
+            "name": "sources_json",
+            "type": "string",
+            "required": true,
+            "description": "Serialized sources JSON"
+          },
+          {
+            "name": "quote_json",
+            "type": "string",
+            "required": true,
+            "description": "Serialized quote JSON"
+          },
+          {
+            "name": "output_schema_json",
+            "type": "string",
+            "required": true,
+            "description": "Serialized output_schema JSON"
+          }
+        ]
+      }
+    },
+    {
+      "node_id": "compare_1",
+      "node_type": "action",
+      "name": "PromiseGuard comparison",
+      "position": {
+        "x": 0,
+        "y": 160
+      },
+      "connections": [
+        "parse_1"
+      ],
+      "config": {
+        "action_id": "0d7b0d2d-eaff-45cd-a5e8-865496833630",
+        "action_name": "PromiseGuard Compare v1",
+        "action_type": "llm",
+        "input_mappings": [
+          {
+            "target_field": "context_json",
+            "source_expression": "${input.context_json}"
+          },
+          {
+            "target_field": "sources_json",
+            "source_expression": "${input.sources_json}"
+          },
+          {
+            "target_field": "quote_json",
+            "source_expression": "${input.quote_json}"
+          },
+          {
+            "target_field": "output_schema_json",
+            "source_expression": "${input.output_schema_json}"
+          }
+        ],
+        "on_error": "stop",
+        "timeout": 240
+      }
+    },
+    {
+      "node_id": "parse_1",
+      "node_type": "parse_json",
+      "name": "Parse comparison JSON",
+      "position": {
+        "x": 0,
+        "y": 320
+      },
+      "connections": [],
+      "config": {
+        "input": "${compare_1.result}",
+        "on_error": "continue",
+        "detected_keys": [
+          "findings",
+          "truncated"
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "trigger_1",
+      "target": "compare_1",
+      "edge_type": "default"
+    },
+    {
+      "id": "e2",
+      "source": "compare_1",
+      "target": "parse_1",
+      "edge_type": "default"
+    }
+  ]
+}
