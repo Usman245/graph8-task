@@ -120,7 +120,7 @@ export const ReviewManifestSchema = z.object({
   quoteHash: z.string(),
   quoteTextComplete: z.boolean(),
   quoteIncludedFields: z.array(z.string()),
-  promptVersion: z.literal("pg-v1"),
+  promptVersion: z.string(),
   workflowId: z.string(),
   executionId: z.string().nullable(),
   runState: z.enum(RUN_STATES),

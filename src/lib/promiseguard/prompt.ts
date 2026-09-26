@@ -2,7 +2,9 @@
 // Plain module (no aliases, no server-only) so setup scripts can import it directly.
 // The template uses Graph8 single-brace variables; it must contain no other braces.
 
-export const PROMPT_VERSION = "pg-v1" as const;
+export const PROMPT_VERSION = "pg-v2" as const;
+/** Graph8 skills default to max_tokens 1000 (verified), which truncates larger reports. */
+export const MAX_OUTPUT_TOKENS = 4000;
 export const SKILL_NAME = "PromiseGuard Compare v1";
 export const WORKFLOW_NAME = "PromiseGuard Compare Workflow v1";
 export const DEMO_PREFIX = "[PromiseGuard Demo]";
@@ -20,6 +22,7 @@ A buyer request, possibility, hypothetical example, or question is not a promise
 Each sales document has a speaker_side of seller, buyer, or unknown. Only seller statements can be promises.
 Preserve speaker attribution, dates, conditions, numbers, and units.
 If speaker attribution is uncertain, use needs_review.
+A statement whose speaker_side is unknown that reads like a commitment must be reported with coverage needs_review; do not omit it.
 Use only the supplied documents.
 
 For each supported commitment:
@@ -33,10 +36,11 @@ For covered and conflict, also include exact quote excerpts copied character for
 For missing, do not invent an excerpt proving absence; leave quote_evidence empty.
 If the quote is marked text_complete false, never use missing; use needs_review instead.
 Do not estimate cost, money saved, legal liability, or delivery capability.
-Handle later corrections cautiously and preserve material conditions in the conditions list.
+Put every dependency, prerequisite, or deadline attached to a commitment in the conditions list, for example "after the client supplies final assets" or "only if signed by October 15".
+If a later statement corrects or withdraws an earlier promise, report only the latest position and mention the correction in the reason.
 Produce at most max_findings findings, as stated in the context.
 Return truncated=true if additional material findings could not be included.
-No HTML, Markdown fences, or commentary outside the JSON.
+No HTML, Markdown fences, or commentary outside the JSON. Write compact JSON without indentation or line breaks. Keep each reason under 40 words.
 
 Context:
 {context_json}

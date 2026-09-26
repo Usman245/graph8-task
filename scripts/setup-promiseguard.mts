@@ -3,7 +3,8 @@
 //
 // Usage: node scripts/setup-promiseguard.mts <step...>
 //   users     list org users (for PROMISEGUARD_ASSIGNEES and the demo deal owner)
-//   records   demo company, contact, deal, and draft quote ("[PromiseGuard Demo]" prefix)
+//   records   demo companies, contacts, deals, and draft quotes for every scenario ("[PromiseGuard Demo]" prefix)
+//             records:<key> limits it to one scenario (acme, northwind, globex, lakeside)
 //   skill     comparison LLM skill
 //   workflow  workflow that runs the skill (validated before save)
 //   all       records + skill + workflow
@@ -14,30 +15,51 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { describeError, g8 } from "./lib/g8.mts";
 import {
+  MAX_OUTPUT_TOKENS,
   PROMPT_TEMPLATE,
   PROMPT_VARIABLES,
   SKILL_NAME,
   WORKFLOW_NAME,
 } from "../src/lib/promiseguard/prompt.ts";
-import { DEMO_COMPANY, DEMO_CONTACT, DEMO_DEAL, DEMO_QUOTE } from "../src/lib/promiseguard/sample-data.ts";
+import { DEMO_SCENARIOS, type DemoScenario } from "../src/lib/promiseguard/sample-data.ts";
 
 const STATE_FILE = "graph8/promiseguard-setup.json";
 const WORKFLOW_FILE = "graph8/promiseguard-workflow.json";
 const PREFERRED_MODELS = ["claude-sonnet-4-6", "gpt-4o", "claude-3-5-sonnet-20241022"];
 
-type State = {
-  ownerUserId?: string;
+type ScenarioState = {
   companyId?: number;
   contactId?: number;
   dealId?: string;
-  quoteId?: string;
+  quotes?: Record<string, string>;
+};
+
+type State = {
+  ownerUserId?: string;
+  scenarios?: Record<string, ScenarioState>;
   skillId?: string;
   modelId?: string;
   workflowId?: string | number;
   updatedAt?: string;
+  // Legacy single-scenario fields (Acme), migrated into scenarios.acme on load.
+  companyId?: number;
+  contactId?: number;
+  dealId?: string;
+  quoteId?: string;
 };
 
 const state: State = existsSync(STATE_FILE) ? JSON.parse(readFileSync(STATE_FILE, "utf8")) : {};
+if (state.dealId && !state.scenarios?.acme) {
+  state.scenarios = {
+    ...state.scenarios,
+    acme: { companyId: state.companyId, contactId: state.contactId, dealId: state.dealId, quotes: state.quoteId ? { main: state.quoteId } : {} },
+  };
+}
+delete state.companyId;
+delete state.contactId;
+delete state.dealId;
+delete state.quoteId;
+
 function save() {
   mkdirSync("graph8", { recursive: true });
   state.updatedAt = new Date().toISOString();
@@ -53,7 +75,7 @@ async function users() {
   return items;
 }
 
-async function records() {
+async function records(only?: string) {
   // Owner: explicit env, else the first team member.
   if (!state.ownerUserId) {
     const items = await users();
@@ -62,73 +84,106 @@ async function records() {
     state.ownerUserId = owner;
     save();
   }
+  state.scenarios ??= {};
+  for (const scenario of DEMO_SCENARIOS) {
+    if (only && scenario.key !== only) continue;
+    console.log(`\n== ${scenario.key}: ${scenario.deal.name}`);
+    const st = (state.scenarios[scenario.key] ??= { quotes: {} });
+    await scenarioRecords(scenario, st);
+  }
+}
 
+async function scenarioRecords(sc: DemoScenario, st: ScenarioState) {
   // Company: Graph8 dedups by domain.
-  if (!state.companyId) {
-    const res = await g8("POST", "/companies", { operation: "create demo company", body: DEMO_COMPANY });
-    state.companyId = res?.data?.company_id;
-    console.log(`company: ${res?.data?.status} id=${state.companyId} merged=${res?.data?.merged}`);
+  if (!st.companyId) {
+    const res = await g8("POST", "/companies", { operation: "create demo company", body: sc.company });
+    st.companyId = res?.data?.company_id;
+    console.log(`company: ${res?.data?.status} id=${st.companyId} merged=${res?.data?.merged}`);
     save();
-  } else console.log(`company: reuse id=${state.companyId}`);
+  } else console.log(`company: reuse id=${st.companyId}`);
 
   // Contact: reuse stored ID; Graph8 may also merge by email.
-  if (!state.contactId) {
+  if (!st.contactId) {
     const res = await g8("POST", "/contacts", {
       operation: "create demo contact",
-      body: { ...DEMO_CONTACT, company_id: state.companyId, company_domain: DEMO_COMPANY.domain },
+      body: { ...sc.contact, company_id: st.companyId, company_domain: sc.company.domain },
     });
-    state.contactId = res?.data?.contact_id ?? undefined;
-    console.log(`contact: ${res?.data?.status} id=${state.contactId} merged=${res?.data?.merged} attached=${res?.data?.company_attached}`);
+    st.contactId = res?.data?.contact_id ?? undefined;
+    console.log(`contact: ${res?.data?.status} id=${st.contactId} merged=${res?.data?.merged} attached=${res?.data?.company_attached}`);
     if (res?.data?.validation_errors?.length) console.log("  validation:", res.data.validation_errors);
     save();
-  } else console.log(`contact: reuse id=${state.contactId}`);
+  } else console.log(`contact: reuse id=${st.contactId}`);
 
   // Deal: stored ID, else search by exact name.
-  if (state.dealId && !(await exists(`/deals/${state.dealId}`, "read demo deal"))) state.dealId = undefined;
-  if (!state.dealId) {
-    const list = await g8("GET", "/deals", { operation: "search deals", query: { page: 1, limit: 100, search: DEMO_DEAL.name } });
-    const found = (list?.data ?? []).find((d: any) => d.name === DEMO_DEAL.name);
+  if (st.dealId && !(await exists(`/deals/${st.dealId}`, "read demo deal"))) st.dealId = undefined;
+  if (!st.dealId) {
+    const list = await g8("GET", "/deals", { operation: "search deals", query: { page: 1, limit: 100, search: sc.deal.name } });
+    const found = (list?.data ?? []).find((d: any) => d.name === sc.deal.name);
     if (found) {
-      state.dealId = found.id;
-      console.log(`deal: found id=${state.dealId}`);
+      st.dealId = found.id;
+      console.log(`deal: found id=${st.dealId}`);
     } else {
       const res = await g8("POST", "/deals", {
         operation: "create demo deal",
-        body: { ...DEMO_DEAL, owner_id: state.ownerUserId, contact_ids: [state.contactId] },
+        body: { ...sc.deal, owner_id: state.ownerUserId, contact_ids: [st.contactId] },
       });
-      state.dealId = res?.data?.id;
-      console.log(`deal: created id=${state.dealId} stage=${res?.data?.stage_name}`);
+      st.dealId = res?.data?.id;
+      console.log(`deal: created id=${st.dealId}`);
     }
     save();
-  } else console.log(`deal: reuse id=${state.dealId}`);
+  } else console.log(`deal: reuse id=${st.dealId}`);
 
-  // Quote: stored ID, else company quotes by exact title. Always a draft; never sent.
-  if (state.quoteId && !(await exists(`/quotes/${state.quoteId}`, "read demo quote"))) state.quoteId = undefined;
-  if (!state.quoteId) {
-    const list = await g8("GET", "/quotes", { operation: "list deal quotes", query: { deal_id: state.dealId!, page: 1, limit: 50 } });
-    const rows: any[] = list?.data?.items ?? [];
-    const found = Array.isArray(rows) ? rows.find((q) => q.title === DEMO_QUOTE.title) : undefined;
+  // Quotes: stored ID, else find by exact title. Always drafts; never sent.
+  st.quotes ??= {};
+  for (const q of sc.quotes) {
+    const stored = st.quotes[q.key];
+    if (stored && (await exists(`/quotes/${stored}`, "read demo quote"))) {
+      await syncDraftTerms(q, stored);
+      continue;
+    }
+    const list = await g8("GET", "/quotes", {
+      operation: "list demo quotes",
+      query: q.linkToDeal ? { deal_id: st.dealId!, page: 1, limit: 50 } : { mashup_company_id: st.companyId!, page: 1, limit: 50 },
+    });
+    const found = (list?.data?.items ?? []).find((x: any) => x.title === q.title);
     if (found) {
-      state.quoteId = found.id;
-      console.log(`quote: found id=${state.quoteId}`);
+      st.quotes[q.key] = found.id;
+      console.log(`quote ${q.key}: found id=${found.id}`);
     } else {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars -- app-only fields, not sent to Graph8
+      const { key: _key, linkToDeal, ...body } = q;
       const res = await g8("POST", "/quotes", {
         operation: "create demo draft quote",
         body: {
-          ...DEMO_QUOTE,
-          deal_id: state.dealId,
-          mashup_company_id: state.companyId,
-          signer_contact_id: state.contactId,
-          signer_email: DEMO_CONTACT.work_email,
-          signer_name: "Jordan Reyes",
+          ...body,
+          ...(linkToDeal ? { deal_id: st.dealId } : {}),
+          mashup_company_id: st.companyId,
+          signer_contact_id: st.contactId,
+          signer_email: sc.contact.work_email,
+          signer_name: `${sc.contact.first_name.replace("[PromiseGuard Demo] ", "")} ${sc.contact.last_name}`,
           owner_id: state.ownerUserId,
         },
       });
-      state.quoteId = res?.data?.id;
-      console.log(`quote: created id=${state.quoteId} number=${res?.data?.quote_number} status=${res?.data?.status}`);
+      st.quotes[q.key] = res?.data?.id;
+      console.log(`quote ${q.key}: created id=${res?.data?.id} number=${res?.data?.quote_number} status=${res?.data?.status} deal=${res?.data?.deal_id}`);
     }
     save();
-  } else console.log(`quote: reuse id=${state.quoteId}`);
+  }
+}
+
+/** Keep demo quote text in sync with sample-data.ts. Only drafts are edited; a sent quote is never recalled. */
+async function syncDraftTerms(q: DemoScenario["quotes"][number], quoteId: string) {
+  const current = (await g8("GET", `/quotes/${quoteId}`, { operation: "read demo quote" }))?.data;
+  if (current?.terms_content === q.terms_content) {
+    console.log(`quote ${q.key}: reuse id=${quoteId} (terms unchanged)`);
+    return;
+  }
+  if (current?.status !== "draft") {
+    console.log(`quote ${q.key}: reuse id=${quoteId}; terms differ but status is ${current?.status}, not editing`);
+    return;
+  }
+  await g8("PATCH", `/quotes/${quoteId}`, { operation: "update demo draft quote terms", body: { terms_content: q.terms_content } });
+  console.log(`quote ${q.key}: reuse id=${quoteId} (draft terms updated)`);
 }
 
 async function exists(path: string, operation: string): Promise<boolean> {
@@ -146,7 +201,7 @@ async function skill() {
   const modelId = process.env.GRAPH8_MODEL_ID || PREFERRED_MODELS.find((m) => available.includes(m)) || available[0];
   if (!modelId) throw new Error("No Graph8 LLM model available");
 
-  const llm_config = { model: modelId, prompt_template: PROMPT_TEMPLATE, temperature: 0.1 };
+  const llm_config = { model: modelId, prompt_template: PROMPT_TEMPLATE, temperature: 0.1, max_tokens: MAX_OUTPUT_TOKENS };
   const validation = await g8("POST", "/skills/validate", { operation: "validate skill", body: { runtime_type: "llm", llm_config } });
   console.log("skill validate:", JSON.stringify(validation));
   const vars: string[] = validation?.variables ?? [];
@@ -272,6 +327,7 @@ try {
   for (const step of steps) {
     if (step === "users") await users();
     else if (step === "records") await records();
+    else if (step.startsWith("records:")) await records(step.slice(8));
     else if (step === "skill") await skill();
     else if (step === "workflow") await workflow();
     else if (step === "all") {

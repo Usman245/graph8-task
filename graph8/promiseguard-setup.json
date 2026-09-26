@@ -1,11 +1,43 @@
 {
-  "updatedAt": "2026-09-26T13:17:41.945Z",
-  "companyId": 1,
-  "contactId": 1,
+  "updatedAt": "2026-09-26T14:14:00.540Z",
   "ownerUserId": "8d63f41f-d5f8-446d-8c99-b70c0318b2dd",
-  "dealId": "33fdb517-bcf3-4a81-bc60-1fc881e7c9a8",
-  "quoteId": "ace50826-e30e-400f-85a6-7279e9b39004",
   "skillId": "0d7b0d2d-eaff-45cd-a5e8-865496833630",
   "modelId": "gpt-4o",
-  "workflowId": "bd407a17-f542-46d8-8340-a5c7d76a37b7"
+  "workflowId": "bd407a17-f542-46d8-8340-a5c7d76a37b7",
+  "scenarios": {
+    "acme": {
+      "companyId": 1,
+      "contactId": 1,
+      "dealId": "33fdb517-bcf3-4a81-bc60-1fc881e7c9a8",
+      "quotes": {
+        "main": "ace50826-e30e-400f-85a6-7279e9b39004"
+      }
+    },
+    "northwind": {
+      "quotes": {
+        "v1": "5af82b2d-5c50-4e47-924b-e36c0ca5fb60",
+        "v2": "094d8c53-3d0d-43d4-b204-23d9040bc22e"
+      },
+      "companyId": 2,
+      "contactId": 2,
+      "dealId": "6a03af33-bb9a-4e71-89ad-b71cf0e4db72"
+    },
+    "globex": {
+      "quotes": {
+        "main": "ce92a770-6b34-4c7f-b25a-19a8cc51075d",
+        "pilot": "320e9389-f348-485b-9730-c47818d064b9"
+      },
+      "companyId": 3,
+      "contactId": 3,
+      "dealId": "e606f070-a149-45fa-b5b4-6a1d3ebb99fa"
+    },
+    "lakeside": {
+      "quotes": {
+        "main": "41051a07-b44a-43a9-be47-c8543b74354d"
+      },
+      "companyId": 4,
+      "contactId": 4,
+      "dealId": "35ecdab6-07fa-4a2c-ae78-61b6978422b0"
+    }
+  }
 }
