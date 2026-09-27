@@ -23,6 +23,9 @@ send gate, record matching, evidence verification, and access control.
 
 > PromiseGuard is decision support. It does not determine contractual liability or whether the work can be delivered.
 
+
+New to the code? Start with the short [code overview](docs/CODE-OVERVIEW.md).
+
 ## Why this matters in a crowded hackathon
 
 Many revenue agents can discover prospects, draft outreach, qualify replies, or recommend a next step. Graph8 already does
