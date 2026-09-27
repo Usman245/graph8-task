@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { DealList } from "@/components/deals/deal-list";
-import { Arrow, PromiseMock, Shield, Underline } from "@/components/promise-mock";
-import { SampleBadge } from "@/components/status";
+import { DealList } from "@/components/deals/DealList";
+import { Arrow, PromiseMock, Shield, Underline } from "@/components/PromiseMock";
+import { SampleBadge } from "@/components/Status";
 import { findExampleReview } from "@/lib/promiseguard/example";
 import { currentMode } from "@/lib/promiseguard/mode";
 

@@ -3,10 +3,10 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
-import { CoverageBadge, ErrorPanel, GateBadge, RiskBadge } from "@/components/status";
-import { Button } from "@/components/ui/button";
-import { Drawer } from "@/components/ui/drawer";
-import { Notice } from "@/components/ui/page-header";
+import { CoverageBadge, ErrorPanel, GateBadge, RiskBadge } from "@/components/Status";
+import { Button } from "@/components/ui/Button";
+import { Drawer } from "@/components/ui/Drawer";
+import { Notice } from "@/components/ui/PageHeader";
 import { ApiError, api } from "@/lib/api/client-fetch";
 import type { QuoteGateDetail, SendResult } from "@/lib/promiseguard/guard";
 

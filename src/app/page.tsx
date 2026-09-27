@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { Logo } from "@/components/logo";
-import { Arrow, PromiseMock, Shield, Underline } from "@/components/promise-mock";
-import { Badge } from "@/components/ui/badge";
+import { Logo } from "@/components/Logo";
+import { Arrow, PromiseMock, Shield, Underline } from "@/components/PromiseMock";
+import { Badge } from "@/components/ui/Badge";
 
 export const metadata = {
   title: { absolute: "PromiseGuard · Catch promises the quote forgot" },

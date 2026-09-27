@@ -2,10 +2,10 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useRef, useState } from "react";
-import { COVERAGE_LABEL, CoverageBadge, RiskBadge, SampleBadge } from "@/components/status";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Drawer } from "@/components/ui/drawer";
+import { COVERAGE_LABEL, CoverageBadge, RiskBadge, SampleBadge } from "@/components/Status";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Drawer } from "@/components/ui/Drawer";
 import { formatDate } from "@/components/ui/format";
 import { ApiError, api } from "@/lib/api/client-fetch";
 import type { ReviewQuote } from "@/lib/promiseguard/fixes";

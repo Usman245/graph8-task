@@ -3,8 +3,8 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { EmptyPanel, ErrorPanel, SampleBadge } from "@/components/status";
-import { Button } from "@/components/ui/button";
+import { EmptyPanel, ErrorPanel, SampleBadge } from "@/components/Status";
+import { Button } from "@/components/ui/Button";
 import { formatDate, formatMoney } from "@/components/ui/format";
 import { api } from "@/lib/api/client-fetch";
 import type { DealPage } from "@/lib/promiseguard/context";

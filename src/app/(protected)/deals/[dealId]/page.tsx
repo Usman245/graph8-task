@@ -1,4 +1,4 @@
-import { DealWorkspace } from "@/components/deals/deal-workspace";
+import { DealWorkspace } from "@/components/deals/DealWorkspace";
 
 export const metadata = { title: "Deal", description: "Choose a quotation and sales conversations, then check every promise against the quote." };
 

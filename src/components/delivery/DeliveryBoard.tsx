@@ -4,10 +4,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
 import { api } from "@/lib/api/client-fetch";
-import { EmptyPanel, ErrorPanel } from "@/components/status";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Notice, StatTile } from "@/components/ui/page-header";
+import { EmptyPanel, ErrorPanel } from "@/components/Status";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Notice, StatTile } from "@/components/ui/PageHeader";
 import type { deliveryBoard, DeliveryRow } from "@/lib/promiseguard/delivery";
 import type { DeliveryState } from "@/lib/promiseguard/delivery-schema";
 

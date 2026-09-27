@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { Logo } from "@/components/logo";
-import { LogoutButton } from "@/components/logout-button";
-import { ModeSwitch } from "@/components/mode-switch";
-import { NavLinks } from "@/components/nav-links";
+import { Logo } from "@/components/Logo";
+import { LogoutButton } from "@/components/LogoutButton";
+import { ModeSwitch } from "@/components/ModeSwitch";
+import { NavLinks } from "@/components/NavLinks";
 import { requirePageSession } from "@/lib/auth/guard";
 import { env } from "@/lib/env";
 import { currentMode } from "@/lib/promiseguard/mode";

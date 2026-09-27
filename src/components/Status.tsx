@@ -1,4 +1,4 @@
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@/components/ui/Badge";
 import { GATE_LABEL, type GateState } from "@/lib/promiseguard/gate-rules";
 import type { Coverage, RiskLevel } from "@/lib/promiseguard/schemas";
 

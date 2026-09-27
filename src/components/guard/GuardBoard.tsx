@@ -3,14 +3,14 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
-import { EmptyPanel, ErrorPanel, GateBadge } from "@/components/status";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { EmptyPanel, ErrorPanel, GateBadge } from "@/components/Status";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
 import { formatDate, formatMinor } from "@/components/ui/format";
-import { StatTile } from "@/components/ui/page-header";
+import { StatTile } from "@/components/ui/PageHeader";
 import { ApiError, api } from "@/lib/api/client-fetch";
 import type { AutoResult, GuardBoard as Board, GuardRow } from "@/lib/promiseguard/guard";
-import { SendDialog } from "./send-dialog";
+import { SendDialog } from "./SendDialog";
 
 const needsReview = (r: GuardRow) => r.gate.state === "no_review" || r.gate.state === "changed";
 const ORDER = { at_risk: 0, incomplete: 1, changed: 2, no_review: 3, failed: 4, reviewing: 5, clear: 6, not_linked: 7, closed: 8 } as const;

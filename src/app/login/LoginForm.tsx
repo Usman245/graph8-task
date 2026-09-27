@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/ui/Button";
 import { ApiError, api } from "@/lib/api/client-fetch";
 
 /** Shown on the login page so demo reviewers can sign in. Must match PROMISEGUARD_APP_PASSWORD. */

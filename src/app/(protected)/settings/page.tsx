@@ -1,5 +1,5 @@
-import { ConnectionPanel } from "@/components/settings/connection-panel";
-import { PageHeader } from "@/components/ui/page-header";
+import { ConnectionPanel } from "@/components/settings/ConnectionPanel";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 export const metadata = { title: "Connection", description: "Check what the configured Graph8 connection can do." };
 

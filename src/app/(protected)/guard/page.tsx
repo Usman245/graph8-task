@@ -1,5 +1,5 @@
-import { GuardBoard } from "@/components/guard/guard-board";
-import { PageHeader } from "@/components/ui/page-header";
+import { GuardBoard } from "@/components/guard/GuardBoard";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { currentMode } from "@/lib/promiseguard/mode";
 
 export const metadata = { title: "Quote Guard", description: "Every quote is reviewed automatically and sending stays blocked while promise risks are open." };

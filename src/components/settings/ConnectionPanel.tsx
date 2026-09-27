@@ -1,8 +1,8 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
 import { ApiError, api } from "@/lib/api/client-fetch";
 import type { ConnectionStatus } from "@/lib/promiseguard/capabilities";
 

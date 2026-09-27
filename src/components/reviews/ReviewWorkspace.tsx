@@ -4,18 +4,18 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { SendDialog, gateKey } from "@/components/guard/send-dialog";
-import { COVERAGE_LABEL, CoverageBadge, EmptyPanel, ErrorPanel, GateBadge, ModeBadge, RiskBadge, SampleBadge } from "@/components/status";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { SendDialog, gateKey } from "@/components/guard/SendDialog";
+import { COVERAGE_LABEL, CoverageBadge, EmptyPanel, ErrorPanel, GateBadge, ModeBadge, RiskBadge, SampleBadge } from "@/components/Status";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
 import { formatDate } from "@/components/ui/format";
-import { Notice, PageHeader, StatTile } from "@/components/ui/page-header";
+import { Notice, PageHeader, StatTile } from "@/components/ui/PageHeader";
 import { ApiError, api } from "@/lib/api/client-fetch";
 import type { QuoteGateDetail } from "@/lib/promiseguard/guard";
 import type { FinalizeResult, ReviewView } from "@/lib/promiseguard/runs";
 import type { Finding } from "@/lib/promiseguard/schemas";
-import { FindingDrawer } from "./finding-drawer";
-import { PromiseHandoff } from "./promise-handoff";
+import { FindingDrawer } from "./FindingDrawer";
+import { PromiseHandoff } from "./PromiseHandoff";
 
 const ACTIVE = new Set(["preparing", "running", "start_unknown"]);
 

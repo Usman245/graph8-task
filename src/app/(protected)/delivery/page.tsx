@@ -1,5 +1,5 @@
-import { DeliveryBoard } from "@/components/delivery/delivery-board";
-import { PageHeader } from "@/components/ui/page-header";
+import { DeliveryBoard } from "@/components/delivery/DeliveryBoard";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 export const metadata = { title: "Delivery", description: "Track owners, deadlines, and completion evidence for promises handed to delivery." };
 

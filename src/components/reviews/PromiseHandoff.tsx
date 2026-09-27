@@ -4,8 +4,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
 import { api } from "@/lib/api/client-fetch";
-import { Button } from "@/components/ui/button";
-import { ErrorPanel } from "@/components/status";
+import { Button } from "@/components/ui/Button";
+import { ErrorPanel } from "@/components/Status";
 import type { handoffContext } from "@/lib/promiseguard/delivery";
 
 type Context = Omit<Awaited<ReturnType<typeof handoffContext>>, "manifest">;

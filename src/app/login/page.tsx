@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { Logo } from "@/components/logo";
-import { LoginForm } from "./login-form";
+import { Logo } from "@/components/Logo";
+import { LoginForm } from "./LoginForm";
 
 export const metadata = { title: "Sign in", description: "Sign in to the PromiseGuard review workspace." };
 
