@@ -25,9 +25,19 @@ const DealDto = z.object({
   primary_contact: ContactBrief.nullish(),
 });
 
-const Pagination = z.object({ page: z.number(), limit: z.number(), total: z.number(), has_next: z.boolean() });
+const Pagination = z.object({
+  page: z.number(),
+  limit: z.number(),
+  total: z.number(),
+  has_next: z.boolean(),
+});
 
-export type DealContact = { id: string; name: string | null; email: string | null; title: string | null };
+export type DealContact = {
+  id: string;
+  name: string | null;
+  email: string | null;
+  title: string | null;
+};
 
 export type Deal = {
   id: string;
@@ -51,7 +61,9 @@ function toDeal(d: z.infer<typeof DealDto>): Deal {
     companyId: d.company_id != null ? String(d.company_id) : null,
     ownerName: d.owner_name ?? null,
     updatedAt: d.updated_at ?? null,
-    contacts: (d.contacts ?? (d.primary_contact ? [d.primary_contact] : [])).map((c) => ({
+    contacts: (
+      d.contacts ?? (d.primary_contact ? [d.primary_contact] : [])
+    ).map((c) => ({
       id: String(c.id),
       name: c.name ?? null,
       email: c.email?.trim().toLowerCase() ?? null,
@@ -60,13 +72,25 @@ function toDeal(d: z.infer<typeof DealDto>): Deal {
   };
 }
 
-export async function listDeals(opts: { page: number; limit: number; search?: string }) {
+export async function listDeals(opts: {
+  page: number;
+  limit: number;
+  search?: string;
+}) {
   const operation = "list deals";
   const json = await graph8.get("/deals", {
     operation,
-    query: { page: opts.page, limit: opts.limit, search: opts.search || undefined },
+    query: {
+      page: opts.page,
+      limit: opts.limit,
+      search: opts.search || undefined,
+    },
   });
-  const res = parseResponse(z.object({ data: z.array(DealDto), pagination: Pagination }), json, operation);
+  const res = parseResponse(
+    z.object({ data: z.array(DealDto), pagination: Pagination }),
+    json,
+    operation,
+  );
   return {
     items: res.data.map(toDeal),
     page: res.pagination.page,
@@ -78,5 +102,7 @@ export async function listDeals(opts: { page: number; limit: number; search?: st
 export async function getDeal(dealId: string): Promise<Deal> {
   const operation = "read deal";
   const json = await graph8.get(path`/deals/${dealId}`, { operation });
-  return toDeal(parseResponse(z.object({ data: DealDto }), json, operation).data);
+  return toDeal(
+    parseResponse(z.object({ data: DealDto }), json, operation).data,
+  );
 }

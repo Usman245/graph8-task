@@ -3,7 +3,10 @@
 
 const tails = new Map<string, Promise<unknown>>();
 
-export async function withLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+export async function withLock<T>(
+  key: string,
+  fn: () => Promise<T>,
+): Promise<T> {
   const previous = tails.get(key) ?? Promise.resolve();
   const run = previous.catch(() => undefined).then(fn);
   const tail = run.catch(() => undefined);

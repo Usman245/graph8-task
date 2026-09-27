@@ -25,6 +25,11 @@ const QuoteDto = z.object({
   signer_email: z.string().nullish(),
   // Set when the signer is a Graph8 contact (signer_contact_id) rather than a typed email.
   signer_contact_email: z.string().nullish(),
+  signer_contact_id: z.union([z.number(), z.string()]).nullish(),
+  signer_name: z.string().nullish(),
+  billing_legal_name: z.string().nullish(),
+  billing_email: z.string().nullish(),
+  billing_address: z.string().nullish(),
   company_name: z.string().nullish(),
   currency: z.string().nullish(),
   total: z.number().nullish(),
@@ -42,6 +47,7 @@ const QuoteDto = z.object({
   created_at: z.string().nullish(),
   updated_at: z.string().nullish(),
   sent_at: z.string().nullish(),
+  accepted_at: z.string().nullish(),
   line_items: z.array(LineItemDto).nullish(),
 });
 
@@ -54,6 +60,9 @@ export type QuoteRecord = {
   companyId: string | null;
   companyName: string | null;
   signerEmail: string | null;
+  signerContactId: number | null;
+  signerName: string | null;
+  billing: { legalName: string | null; email: string | null; address: string | null };
   currency: string | null;
   /** Minor units (cents), as returned by Graph8. */
   totalMinor: number | null;
@@ -67,6 +76,7 @@ export type QuoteRecord = {
   createdAt: string | null;
   updatedAt: string | null;
   sentAt: string | null;
+  acceptedAt: string | null;
   lineItems: Array<{
     id: string;
     productName: string | null;
@@ -94,6 +104,9 @@ function toQuote(q: z.infer<typeof QuoteDto>): QuoteRecord {
     companyId: q.mashup_company_id != null ? String(q.mashup_company_id) : null,
     companyName: q.company_name ?? null,
     signerEmail: (q.signer_email ?? q.signer_contact_email)?.toLowerCase() ?? null,
+    signerContactId: q.signer_contact_id != null && Number.isFinite(Number(q.signer_contact_id)) ? Number(q.signer_contact_id) : null,
+    signerName: q.signer_name ?? null,
+    billing: { legalName: q.billing_legal_name ?? null, email: q.billing_email ?? null, address: q.billing_address ?? null },
     currency: q.currency ?? null,
     totalMinor: q.total ?? null,
     termsContent: q.terms_content ?? null,
@@ -106,6 +119,7 @@ function toQuote(q: z.infer<typeof QuoteDto>): QuoteRecord {
     createdAt: q.created_at ?? null,
     updatedAt: q.updated_at ?? null,
     sentAt: q.sent_at ?? null,
+    acceptedAt: q.accepted_at ?? null,
     lineItems: [...(q.line_items ?? [])]
       .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
       .map((l) => ({
@@ -177,4 +191,52 @@ export async function previewQuoteSend(quoteId: string, body: { subject?: string
   const operation = "preview quote send";
   const json = await graph8.post(path`/quotes/${quoteId}/send-preview`, { operation, body });
   return parseResponse(z.object({ data: z.record(z.string(), z.unknown()) }), json, operation).data;
+}
+
+type DraftQuoteInput = {
+  title: string;
+  dealId: string;
+  companyId: number;
+  signer: { contactId: number } | { email: string; name: string };
+  billing: { legalName: string | null; email: string | null; address: string | null };
+  currency: string;
+  contractStartDate: string;
+  termsContent: string;
+  notes: string;
+  lineItem: { productName: string; description: string; unitAmountMinor: number };
+};
+
+/** POST /quotes. Always creates a draft; nothing is sent. Not retried: an uncertain create is reconciled by title. */
+export async function createDraftQuote(input: DraftQuoteInput): Promise<QuoteRecord> {
+  const operation = "create change-order draft quote";
+  const signer = "contactId" in input.signer
+    ? { signer_contact_id: input.signer.contactId }
+    : { signer_email: input.signer.email, signer_name: input.signer.name };
+  const json = await graph8.post("/quotes", {
+    operation,
+    body: {
+      title: input.title,
+      deal_id: input.dealId,
+      mashup_company_id: input.companyId,
+      ...signer,
+      ...(input.billing.legalName ? { billing_legal_name: input.billing.legalName } : {}),
+      ...(input.billing.email ? { billing_email: input.billing.email } : {}),
+      ...(input.billing.address ? { billing_address: input.billing.address } : {}),
+      currency: input.currency,
+      payment_terms: "net_30",
+      contract_start_date: input.contractStartDate,
+      terms_content: input.termsContent,
+      notes: input.notes,
+      line_items: [
+        {
+          product_name: input.lineItem.productName,
+          description: input.lineItem.description,
+          quantity: 1,
+          unit_amount: input.lineItem.unitAmountMinor,
+          billing_frequency: "one_time",
+        },
+      ],
+    },
+  });
+  return toQuote(parseResponse(z.object({ data: QuoteDto }), json, operation).data);
 }

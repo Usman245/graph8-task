@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-09-27T09:12:56.593Z",
+  "updatedAt": "2026-09-27T10:51:52.568Z",
   "ownerUserId": "8d63f41f-d5f8-446d-8c99-b70c0318b2dd",
   "skillId": "0d7b0d2d-eaff-45cd-a5e8-865496833630",
   "modelId": "gpt-4o",
@@ -47,5 +47,7 @@
       "contactId": 10,
       "dealId": "70e6f086-087e-4d08-bc82-c9f8b650313a"
     }
-  }
+  },
+  "scopeSkillId": "c92edcce-7a47-4f1b-9f4c-6fca33781737",
+  "scopeWorkflowId": "e77840c5-4936-46a7-9062-7aa85cad8d32"
 }

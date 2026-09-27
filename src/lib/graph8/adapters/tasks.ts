@@ -73,15 +73,24 @@ type TaskCreate = {
 };
 
 /** POST /tasks. Graph8 documents idempotency-key on this endpoint; callers still reconcile on uncertain results. */
-export async function createTask(body: TaskCreate, idempotencyKey: string): Promise<Task> {
+export async function createTask(
+  body: TaskCreate,
+  idempotencyKey: string,
+): Promise<Task> {
   const operation = "create task";
   const json = await graph8.post("/tasks", { operation, body, idempotencyKey });
   return toTask(parseResponse(One, json, operation).data);
 }
 
-export async function createSubtask(parentId: string, body: TaskCreate): Promise<Task> {
+export async function createSubtask(
+  parentId: string,
+  body: TaskCreate,
+): Promise<Task> {
   const operation = "create issue task";
-  const json = await graph8.post(path`/tasks/${parentId}/subtasks`, { operation, body });
+  const json = await graph8.post(path`/tasks/${parentId}/subtasks`, {
+    operation,
+    body,
+  });
   return toTask(parseResponse(One, json, operation).data);
 }
 
@@ -102,36 +111,79 @@ type TaskPatch = Partial<{
 }>;
 
 /** Conditional update: Graph8 rejects with 409 when expectedUpdatedAt is stale. */
-export async function patchTask(taskId: string, patch: TaskPatch, expectedUpdatedAt?: string | null): Promise<Task> {
+export async function patchTask(
+  taskId: string,
+  patch: TaskPatch,
+  expectedUpdatedAt?: string | null,
+): Promise<Task> {
   const operation = "update task";
-  const body = expectedUpdatedAt ? { ...patch, expected_updated_at: expectedUpdatedAt } : patch;
+  const body = expectedUpdatedAt
+    ? { ...patch, expected_updated_at: expectedUpdatedAt }
+    : patch;
   const json = await graph8.patch(path`/tasks/${taskId}`, { operation, body });
   return toTask(parseResponse(One, json, operation).data);
 }
 
-export async function listDealTasks(dealId: string, opts: { search?: string; limit?: number; offset?: number } = {}) {
+export async function listDealTasks(
+  dealId: string,
+  opts: { search?: string; limit?: number; offset?: number } = {},
+) {
   const operation = "list deal tasks";
   const json = await graph8.get("/tasks", {
     operation,
-    query: { entity_type: "deal", entity_id: dealId, search: opts.search, limit: opts.limit ?? 100, offset: opts.offset ?? 0 },
+    query: {
+      entity_type: "deal",
+      entity_id: dealId,
+      search: opts.search,
+      limit: opts.limit ?? 100,
+      offset: opts.offset ?? 0,
+    },
   });
   const res = parseResponse(
-    z.object({ data: z.array(TaskDto), pagination: z.object({ has_next: z.boolean(), total: z.number() }).nullish() }),
+    z.object({
+      data: z.array(TaskDto),
+      pagination: z
+        .object({ has_next: z.boolean(), total: z.number() })
+        .nullish(),
+    }),
     json,
     operation,
   );
-  return { items: res.data.map(toTask), hasNext: res.pagination?.has_next ?? false, total: res.pagination?.total ?? res.data.length };
+  return {
+    items: res.data.map(toTask),
+    hasNext: res.pagination?.has_next ?? false,
+    total: res.pagination?.total ?? res.data.length,
+  };
 }
 
 export async function listSubtasks(parentId: string): Promise<Task[]> {
   const operation = "list issue tasks";
-  const json = await graph8.get(path`/tasks/${parentId}/subtasks`, { operation });
-  return parseResponse(z.object({ data: z.object({ items: z.array(TaskDto) }) }), json, operation).data.items.map(toTask);
+  const json = await graph8.get(path`/tasks/${parentId}/subtasks`, {
+    operation,
+  });
+  return parseResponse(
+    z.object({ data: z.object({ items: z.array(TaskDto) }) }),
+    json,
+    operation,
+  ).data.items.map(toTask);
 }
 
 export async function listDeliveryTasks() {
   const operation = "list delivery tasks";
-  const json = await graph8.get("/tasks", { operation, query: { search: "Delivery:", entity_type: "deal", limit: 200, offset: 0 } });
-  const res = parseResponse(z.object({ data: z.array(TaskDto), pagination: z.object({ has_next: z.boolean() }).nullish() }), json, operation);
-  return { items: res.data.map(toTask), partial: res.pagination?.has_next ?? false };
+  const json = await graph8.get("/tasks", {
+    operation,
+    query: { search: "Delivery:", entity_type: "deal", limit: 200, offset: 0 },
+  });
+  const res = parseResponse(
+    z.object({
+      data: z.array(TaskDto),
+      pagination: z.object({ has_next: z.boolean() }).nullish(),
+    }),
+    json,
+    operation,
+  );
+  return {
+    items: res.data.map(toTask),
+    partial: res.pagination?.has_next ?? false,
+  };
 }

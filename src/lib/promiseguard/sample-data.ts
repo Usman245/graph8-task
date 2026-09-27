@@ -1,11 +1,15 @@
-// Synthetic demo content: Brightside Marketing selling to four local businesses. Sample conversations are not
+// Synthetic demo content: Brightside Marketing selling to five local businesses. Sample conversations are not
 // Graph8 emails or meetings and are always labeled; the deals and draft quotes are created in Graph8 by
 // `node scripts/setup-promiseguard.mts records` with the "[PromiseGuard Demo]" prefix.
 
 export const SAMPLE_LABEL = "Sample conversation";
 export const SAMPLE_SELLER_DOMAIN = "brightside-marketing.example";
 
-export type SampleMessage = { speakerName: string; speakerEmail: string; text: string };
+export type SampleMessage = {
+  speakerName: string;
+  speakerEmail: string;
+  text: string;
+};
 
 export type SampleSource = {
   id: string;
@@ -42,16 +46,32 @@ export type DemoScenario = {
   key: string;
   summary: string;
   company: { name: string; domain: string };
-  contact: { first_name: string; last_name: string; work_email: string; job_title: string };
+  contact: {
+    first_name: string;
+    last_name: string;
+    work_email: string;
+    job_title: string;
+  };
   deal: { name: string; amount: number; currency: "USD" };
   quotes: DemoQuote[];
   sources: SampleSource[];
   expected: string[];
+  /** Demo for the Scope Creep Guard: conversations dated after the quote was signed. Never used by normal reviews. */
+  scopeWatch?: {
+    quoteKey: string;
+    signedAt: string;
+    sources: SampleSource[];
+    expected: string[];
+  };
 };
 
 /** The agency's account manager. Her domain counts as the seller in Demo mode. */
-const SELLER = { speakerName: "Maya Brooks", speakerEmail: `maya.brooks@${SAMPLE_SELLER_DOMAIN}` };
-const NOT_SENT = "[PromiseGuard Demo] Synthetic quote for demonstrating PromiseGuard. Do not send.";
+const SELLER = {
+  speakerName: "Maya Brooks",
+  speakerEmail: `maya.brooks@${SAMPLE_SELLER_DOMAIN}`,
+};
+const NOT_SENT =
+  "[PromiseGuard Demo] Synthetic quote for demonstrating PromiseGuard. Do not send.";
 const terms = (...lines: string[]) => lines.join("\n");
 
 function person(first: string, last: string, domain: string) {
@@ -64,10 +84,20 @@ const OLIVIA = person("Olivia", "Grant", BAKERY_DOMAIN);
 
 const bakery: DemoScenario = {
   key: "bakery",
-  summary: "The headline example: a TikTok promise the quote leaves out, a missing photographer, and a covered monthly report.",
+  summary:
+    "The headline example: a TikTok promise the quote leaves out, a missing photographer, and a covered monthly report.",
   company: { name: "[PromiseGuard Demo] Bloom Bakery", domain: BAKERY_DOMAIN },
-  contact: { first_name: "[PromiseGuard Demo] Olivia", last_name: "Grant", work_email: OLIVIA.speakerEmail, job_title: "Owner" },
-  deal: { name: "[PromiseGuard Demo] Bloom Bakery social media", amount: 4500, currency: "USD" },
+  contact: {
+    first_name: "[PromiseGuard Demo] Olivia",
+    last_name: "Grant",
+    work_email: OLIVIA.speakerEmail,
+    job_title: "Owner",
+  },
+  deal: {
+    name: "[PromiseGuard Demo] Bloom Bakery social media",
+    amount: 4500,
+    currency: "USD",
+  },
   quotes: [
     {
       key: "main",
@@ -81,7 +111,8 @@ const bakery: DemoScenario = {
       line_items: [
         {
           product_name: "Social media management (3 months)",
-          description: "Running Bloom Bakery's Instagram and Facebook pages for 3 months.",
+          description:
+            "Running Bloom Bakery's Instagram and Facebook pages for 3 months.",
           quantity: 1,
           unit_amount: 450000,
           billing_frequency: "one_time",
@@ -108,8 +139,14 @@ const bakery: DemoScenario = {
       occurredAt: "2026-09-10T15:00:00.000Z",
       participants: [SELLER.speakerEmail, OLIVIA.speakerEmail],
       messages: [
-        { ...OLIVIA, text: "We're a small bakery and nobody on our team has time for social media." },
-        { ...SELLER, text: "We'll run your TikTok as well as your Instagram and Facebook." },
+        {
+          ...OLIVIA,
+          text: "We're a small bakery and nobody on our team has time for social media.",
+        },
+        {
+          ...SELLER,
+          text: "We'll run your TikTok as well as your Instagram and Facebook.",
+        },
         { ...OLIVIA, text: "Could you also redesign our logo?" },
         { ...SELLER, text: "A new logo would be a separate project." },
       ],
@@ -142,10 +179,20 @@ const DANIEL = person("Daniel", "Kim", CAFE_DOMAIN);
 
 const cafe: DemoScenario = {
   key: "cafe",
-  summary: "Two quote versions to choose between, a 'free first month if you sign by' promise, and a later correction.",
+  summary:
+    "Two quote versions to choose between, a 'free first month if you sign by' promise, and a later correction.",
   company: { name: "[PromiseGuard Demo] Green Leaf Café", domain: CAFE_DOMAIN },
-  contact: { first_name: "[PromiseGuard Demo] Daniel", last_name: "Kim", work_email: DANIEL.speakerEmail, job_title: "Owner" },
-  deal: { name: "[PromiseGuard Demo] Green Leaf Café Google search", amount: 3600, currency: "USD" },
+  contact: {
+    first_name: "[PromiseGuard Demo] Daniel",
+    last_name: "Kim",
+    work_email: DANIEL.speakerEmail,
+    job_title: "Owner",
+  },
+  deal: {
+    name: "[PromiseGuard Demo] Green Leaf Café Google search",
+    amount: 3600,
+    currency: "USD",
+  },
   quotes: [
     {
       key: "v1",
@@ -159,7 +206,8 @@ const cafe: DemoScenario = {
       line_items: [
         {
           product_name: "Local Google search package (6 months)",
-          description: "Monthly work to help Green Leaf Café show up when people nearby search on Google.",
+          description:
+            "Monthly work to help Green Leaf Café show up when people nearby search on Google.",
           quantity: 1,
           unit_amount: 360000,
           billing_frequency: "one_time",
@@ -223,9 +271,18 @@ const cafe: DemoScenario = {
       occurredAt: "2026-09-02T14:00:00.000Z",
       participants: [SELLER.speakerEmail, DANIEL.speakerEmail],
       messages: [
-        { ...DANIEL, text: "When people search for coffee near me, we never show up." },
-        { ...SELLER, text: "We'll get you on the first page of Google for 'coffee near me' within 2 months." },
-        { ...SELLER, text: "We'll set up your Google Business Profile so you show up on Google Maps." },
+        {
+          ...DANIEL,
+          text: "When people search for coffee near me, we never show up.",
+        },
+        {
+          ...SELLER,
+          text: "We'll get you on the first page of Google for 'coffee near me' within 2 months.",
+        },
+        {
+          ...SELLER,
+          text: "We'll set up your Google Business Profile so you show up on Google Maps.",
+        },
         { ...SELLER, text: "We'll reply to all your Google reviews for you." },
         { ...DANIEL, text: "Can you also run our Facebook ads?" },
         { ...SELLER, text: "Let me check with the team and get back to you." },
@@ -238,7 +295,12 @@ const cafe: DemoScenario = {
       title: "Sample conversation: Green Leaf Café pricing email",
       occurredAt: "2026-09-05T10:15:00.000Z",
       participants: [SELLER.speakerEmail, DANIEL.speakerEmail],
-      messages: [{ ...SELLER, text: "Hi Daniel, good news on pricing: if you sign by October 15, your first month is free." }],
+      messages: [
+        {
+          ...SELLER,
+          text: "Hi Daniel, good news on pricing: if you sign by October 15, your first month is free.",
+        },
+      ],
     },
     {
       id: "cafe-correction-email",
@@ -267,14 +329,27 @@ const cafe: DemoScenario = {
 
 const GYM_DOMAIN = "promiseguard-demo-summitfitness.example";
 const RACHEL = person("Rachel", "Adams", GYM_DOMAIN);
-const FREELANCER = { speakerName: "Leo Martin", speakerEmail: "leo.martin@freelance-video.example" };
+const FREELANCER = {
+  speakerName: "Leo Martin",
+  speakerEmail: "leo.martin@freelance-video.example",
+};
 
 const gym: DemoScenario = {
   key: "gym",
-  summary: "A sign-up guarantee and a price freeze the quote contradicts, a freelancer's promise to check, and a trial quote that needs confirming.",
+  summary:
+    "A sign-up guarantee and a price freeze the quote contradicts, a freelancer's promise to check, and a trial quote that needs confirming.",
   company: { name: "[PromiseGuard Demo] Summit Fitness", domain: GYM_DOMAIN },
-  contact: { first_name: "[PromiseGuard Demo] Rachel", last_name: "Adams", work_email: RACHEL.speakerEmail, job_title: "Gym Owner" },
-  deal: { name: "[PromiseGuard Demo] Summit Fitness online ads", amount: 9000, currency: "USD" },
+  contact: {
+    first_name: "[PromiseGuard Demo] Rachel",
+    last_name: "Adams",
+    work_email: RACHEL.speakerEmail,
+    job_title: "Gym Owner",
+  },
+  deal: {
+    name: "[PromiseGuard Demo] Summit Fitness online ads",
+    amount: 9000,
+    currency: "USD",
+  },
   quotes: [
     {
       key: "main",
@@ -286,8 +361,20 @@ const gym: DemoScenario = {
       contract_duration_value: 12,
       contract_duration_unit: "months",
       line_items: [
-        { product_name: "Ad campaign set-up", description: "Setting up Facebook and Instagram ad campaigns.", quantity: 1, unit_amount: 150000, billing_frequency: "one_time" },
-        { product_name: "Monthly ad management", description: "Running and improving your ads every month.", quantity: 1, unit_amount: 62500, billing_frequency: "month" },
+        {
+          product_name: "Ad campaign set-up",
+          description: "Setting up Facebook and Instagram ad campaigns.",
+          quantity: 1,
+          unit_amount: 150000,
+          billing_frequency: "one_time",
+        },
+        {
+          product_name: "Monthly ad management",
+          description: "Running and improving your ads every month.",
+          quantity: 1,
+          unit_amount: 62500,
+          billing_frequency: "month",
+        },
       ],
       terms_content: terms(
         "What's included",
@@ -308,16 +395,29 @@ const gym: DemoScenario = {
     {
       key: "trial",
       linkToDeal: false,
-      title: "[PromiseGuard Demo] Summit Fitness one-month trial (not linked to a deal)",
+      title:
+        "[PromiseGuard Demo] Summit Fitness one-month trial (not linked to a deal)",
       currency: "USD",
       payment_terms: "net_30",
       contract_start_date: "2026-10-01",
       contract_duration_value: 1,
       contract_duration_unit: "months",
       line_items: [
-        { product_name: "One-month ads trial", description: "One ad campaign on Facebook for one month.", quantity: 1, unit_amount: 50000, billing_frequency: "one_time" },
+        {
+          product_name: "One-month ads trial",
+          description: "One ad campaign on Facebook for one month.",
+          quantity: 1,
+          unit_amount: 50000,
+          billing_frequency: "one_time",
+        },
       ],
-      terms_content: terms("What's included", "One ad campaign on Facebook for one month.", "", "Results", "No results are guaranteed during the trial."),
+      terms_content: terms(
+        "What's included",
+        "One ad campaign on Facebook for one month.",
+        "",
+        "Results",
+        "No results are guaranteed during the trial.",
+      ),
       notes: NOT_SENT,
     },
   ],
@@ -328,12 +428,25 @@ const gym: DemoScenario = {
       format: "call_transcript",
       title: "Sample conversation: Summit Fitness strategy call",
       occurredAt: "2026-09-15T17:00:00.000Z",
-      participants: [SELLER.speakerEmail, RACHEL.speakerEmail, FREELANCER.speakerEmail],
+      participants: [
+        SELLER.speakerEmail,
+        RACHEL.speakerEmail,
+        FREELANCER.speakerEmail,
+      ],
       messages: [
-        { ...RACHEL, text: "January is our busiest month and we need more members." },
-        { ...SELLER, text: "We guarantee at least 50 new member sign-ups every month." },
+        {
+          ...RACHEL,
+          text: "January is our busiest month and we need more members.",
+        },
+        {
+          ...SELLER,
+          text: "We guarantee at least 50 new member sign-ups every month.",
+        },
         { ...SELLER, text: "You'll get 3 new ad designs every month." },
-        { ...FREELANCER, text: "I'll also film a promo video at your gym for the ads." },
+        {
+          ...FREELANCER,
+          text: "I'll also film a promo video at your gym for the ads.",
+        },
         { ...SELLER, text: "Your monthly fee stays the same for 2 years." },
       ],
     },
@@ -344,7 +457,12 @@ const gym: DemoScenario = {
       title: "Sample conversation: Summit Fitness weekly updates email",
       occurredAt: "2026-09-18T08:45:00.000Z",
       participants: [SELLER.speakerEmail, RACHEL.speakerEmail],
-      messages: [{ ...SELLER, text: "Rachel, as promised, we'll send you a quick update every week on how your ads are doing." }],
+      messages: [
+        {
+          ...SELLER,
+          text: "Rachel, as promised, we'll send you a quick update every week on how your ads are doing.",
+        },
+      ],
     },
   ],
   expected: [
@@ -362,10 +480,23 @@ const SOFIA = person("Sofia", "Rivera", DENTAL_DOMAIN);
 
 const dental: DemoScenario = {
   key: "dental",
-  summary: "A mostly well-covered website quote with one free-hosting conflict and a request the agency turned down.",
-  company: { name: "[PromiseGuard Demo] Rivera Family Dental", domain: DENTAL_DOMAIN },
-  contact: { first_name: "[PromiseGuard Demo] Sofia", last_name: "Rivera", work_email: SOFIA.speakerEmail, job_title: "Practice Manager" },
-  deal: { name: "[PromiseGuard Demo] Rivera Family Dental new website", amount: 5000, currency: "USD" },
+  summary:
+    "A mostly well-covered website quote with one free-hosting conflict and a request the agency turned down.",
+  company: {
+    name: "[PromiseGuard Demo] Rivera Family Dental",
+    domain: DENTAL_DOMAIN,
+  },
+  contact: {
+    first_name: "[PromiseGuard Demo] Sofia",
+    last_name: "Rivera",
+    work_email: SOFIA.speakerEmail,
+    job_title: "Practice Manager",
+  },
+  deal: {
+    name: "[PromiseGuard Demo] Rivera Family Dental new website",
+    amount: 5000,
+    currency: "USD",
+  },
   quotes: [
     {
       key: "main",
@@ -379,12 +510,19 @@ const dental: DemoScenario = {
       line_items: [
         {
           product_name: "New website",
-          description: "Design and build of a 5-page website, with up to two rounds of changes on each page.",
+          description:
+            "Design and build of a 5-page website, with up to two rounds of changes on each page.",
           quantity: 1,
           unit_amount: 400000,
           billing_frequency: "one_time",
         },
-        { product_name: "Online booking button", description: "A 'Book an appointment' button on every page.", quantity: 1, unit_amount: 100000, billing_frequency: "one_time" },
+        {
+          product_name: "Online booking button",
+          description: "A 'Book an appointment' button on every page.",
+          quantity: 1,
+          unit_amount: 100000,
+          billing_frequency: "one_time",
+        },
       ],
       terms_content: terms(
         "Hosting",
@@ -409,8 +547,14 @@ const dental: DemoScenario = {
           ...SELLER,
           text: "Hi Sofia, quick recap: your new website will have 5 pages, and you get two rounds of changes on each page. We'll add a 'Book an appointment' button to every page. And we'll host the website for free for the first year.",
         },
-        { ...SOFIA, text: "Great. Could you also write the text for each page?" },
-        { ...SELLER, text: "We don't write website text, but we can recommend a writer." },
+        {
+          ...SOFIA,
+          text: "Great. Could you also write the text for each page?",
+        },
+        {
+          ...SELLER,
+          text: "We don't write website text, but we can recommend a writer.",
+        },
       ],
     },
   ],
@@ -428,10 +572,23 @@ const NINA = person("Nina", "Patel", YOGA_DOMAIN);
 
 const yoga: DemoScenario = {
   key: "yoga",
-  summary: "A clean quote that covers every promise: Clear to send, then handed to delivery as Graph8 tasks.",
-  company: { name: "[PromiseGuard Demo] Harbor Yoga Studio", domain: YOGA_DOMAIN },
-  contact: { first_name: "[PromiseGuard Demo] Nina", last_name: "Patel", work_email: NINA.speakerEmail, job_title: "Studio Owner" },
-  deal: { name: "[PromiseGuard Demo] Harbor Yoga email newsletter", amount: 2400, currency: "USD" },
+  summary:
+    "A clean quote that covers every promise: Clear to send, then handed to delivery as Graph8 tasks.",
+  company: {
+    name: "[PromiseGuard Demo] Harbor Yoga Studio",
+    domain: YOGA_DOMAIN,
+  },
+  contact: {
+    first_name: "[PromiseGuard Demo] Nina",
+    last_name: "Patel",
+    work_email: NINA.speakerEmail,
+    job_title: "Studio Owner",
+  },
+  deal: {
+    name: "[PromiseGuard Demo] Harbor Yoga email newsletter",
+    amount: 2400,
+    currency: "USD",
+  },
   quotes: [
     {
       key: "main",
@@ -445,14 +602,16 @@ const yoga: DemoScenario = {
       line_items: [
         {
           product_name: "Email newsletter service (6 months)",
-          description: "Two newsletters per month, written and sent for Harbor Yoga Studio.",
+          description:
+            "Two newsletters per month, written and sent for Harbor Yoga Studio.",
           quantity: 1,
           unit_amount: 180000,
           billing_frequency: "one_time",
         },
         {
           product_name: "Newsletter template design",
-          description: "A branded newsletter template in Harbor Yoga's colours with its logo.",
+          description:
+            "A branded newsletter template in Harbor Yoga's colours with its logo.",
           quantity: 1,
           unit_amount: 60000,
           billing_frequency: "one_time",
@@ -480,10 +639,19 @@ const yoga: DemoScenario = {
       occurredAt: "2026-09-16T13:00:00.000Z",
       participants: [SELLER.speakerEmail, NINA.speakerEmail],
       messages: [
-        { ...NINA, text: "We want to stay in touch with our members between classes." },
+        {
+          ...NINA,
+          text: "We want to stay in touch with our members between classes.",
+        },
         { ...SELLER, text: "We'll send two newsletters a month for you." },
-        { ...SELLER, text: "We'll design a template in your colours with your logo." },
-        { ...NINA, text: "Can you move our subscriber list over from the booking system?" },
+        {
+          ...SELLER,
+          text: "We'll design a template in your colours with your logo.",
+        },
+        {
+          ...NINA,
+          text: "Can you move our subscriber list over from the booking system?",
+        },
         { ...SELLER, text: "Yes, we'll import your existing subscriber list." },
       ],
     },
@@ -507,9 +675,76 @@ const yoga: DemoScenario = {
     "Quote Guard shows Clear to send.",
     "Promise Handoff turns each covered promise into a Graph8 delivery task with an owner and a due date; these appear on the Delivery page.",
   ],
+  scopeWatch: {
+    quoteKey: "main",
+    signedAt: "2026-09-30T12:00:00.000Z",
+    sources: [
+      {
+        id: "yoga-after-signing-emails",
+        kind: "sample",
+        format: "email",
+        title: "Sample conversation: Harbor Yoga emails after signing",
+        occurredAt: "2026-10-03T09:00:00.000Z",
+        participants: [SELLER.speakerEmail, NINA.speakerEmail],
+        messages: [
+          {
+            ...NINA,
+            text: "Could you also add a class-schedule page to our website?",
+          },
+          {
+            ...SELLER,
+            text: "Sure, no problem, we'll add a class-schedule page for you.",
+          },
+          {
+            ...NINA,
+            text: "Can we also get a third newsletter in December for our holiday offer?",
+          },
+          {
+            ...SELLER,
+            text: "Let me check what a third newsletter would cost and come back to you.",
+          },
+        ],
+      },
+      {
+        id: "yoga-check-in-call",
+        kind: "sample",
+        format: "call_transcript",
+        title: "Sample conversation: Harbor Yoga check-in call",
+        occurredAt: "2026-10-08T15:00:00.000Z",
+        participants: [SELLER.speakerEmail, NINA.speakerEmail],
+        messages: [
+          {
+            ...NINA,
+            text: "Please make sure the newsletters use our new logo.",
+          },
+          { ...SELLER, text: "Yes, the template already uses your logo." },
+          {
+            ...NINA,
+            text: "Could you also post each newsletter to our Instagram?",
+          },
+          {
+            ...SELLER,
+            text: "Happy to, we'll post each newsletter to your Instagram as well.",
+          },
+        ],
+      },
+    ],
+    expected: [
+      "Class-schedule page on the website: Agreed without payment (the quote covers newsletters only).",
+      "Posting each newsletter to Instagram: Agreed without payment.",
+      "A third newsletter in December: Requested, not agreed (the agency said it would check the cost).",
+      "Using the new logo: In scope (the quote includes a template with the studio's logo).",
+    ],
+  },
 };
 
 /** The first scenario is the headline example linked from the Deals page. */
 export const DEMO_SCENARIOS: DemoScenario[] = [bakery, cafe, gym, dental, yoga];
 
-export const SAMPLE_SOURCES: SampleSource[] = DEMO_SCENARIOS.flatMap((s) => s.sources);
+export const SAMPLE_SOURCES: SampleSource[] = DEMO_SCENARIOS.flatMap(
+  (s) => s.sources,
+);
+
+export const SCOPE_SAMPLE_SOURCES: SampleSource[] = DEMO_SCENARIOS.flatMap(
+  (s) => s.scopeWatch?.sources ?? [],
+);

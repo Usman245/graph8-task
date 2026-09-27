@@ -8,6 +8,7 @@ const EnvSchema = z.object({
   GRAPH8_BASE_URL: z.url().default("https://be.graph8.com/api/v1"),
   GRAPH8_API_KEY: z.string().optional(),
   GRAPH8_WORKFLOW_ID: z.string().optional(),
+  GRAPH8_SCOPE_WORKFLOW_ID: z.string().optional(),
   GRAPH8_SKILL_ID: z.string().optional(),
   GRAPH8_MODEL_ID: z.string().optional(),
   PROMISEGUARD_APP_PASSWORD: z.string().optional(),

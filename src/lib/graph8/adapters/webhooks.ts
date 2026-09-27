@@ -12,12 +12,22 @@ const WebhookDto = z.object({
   is_active: z.boolean().nullish(),
 });
 
-type Webhook = { id: string; name: string | null; url: string; events: string[]; active: boolean };
+type Webhook = {
+  id: string;
+  name: string | null;
+  url: string;
+  events: string[];
+  active: boolean;
+};
 
 export async function listWebhooks(): Promise<Webhook[]> {
   const operation = "list webhooks";
   const json = await graph8.get("/webhooks", { operation });
-  return parseResponse(z.object({ data: z.array(WebhookDto) }), json, operation).data.map((w) => ({
+  return parseResponse(
+    z.object({ data: z.array(WebhookDto) }),
+    json,
+    operation,
+  ).data.map((w) => ({
     id: w.id,
     name: w.name ?? null,
     url: w.url,

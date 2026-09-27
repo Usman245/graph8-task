@@ -8,7 +8,14 @@ import { graph8, parseResponse, path } from "../client";
 const COMPARE_NODE = "compare_1";
 const PARSE_NODE = "parse_1";
 
-type ExecutionStatus = "pending" | "running" | "completed" | "failed" | "paused" | "pending_approval" | "stopped";
+type ExecutionStatus =
+  | "pending"
+  | "running"
+  | "completed"
+  | "failed"
+  | "paused"
+  | "pending_approval"
+  | "stopped";
 const TERMINAL_STATUSES: ExecutionStatus[] = ["completed", "failed", "stopped"];
 
 const NodeResult = z.object({
@@ -59,7 +66,8 @@ function toExecution(e: z.infer<typeof ExecutionDto>): Execution {
     status: e.status,
     terminal: (TERMINAL_STATUSES as string[]).includes(e.status),
     errorMessage: e.error_message ?? null,
-    rawResult: typeof raw === "string" ? raw : raw != null ? JSON.stringify(raw) : null,
+    rawResult:
+      typeof raw === "string" ? raw : raw != null ? JSON.stringify(raw) : null,
     parsedResult: nodes[PARSE_NODE]?.output?.result ?? null,
     inputData: e.input_data ?? null,
     tokens: { input: e.tokens_input ?? null, output: e.tokens_output ?? null },
@@ -69,25 +77,44 @@ function toExecution(e: z.infer<typeof ExecutionDto>): Execution {
 }
 
 /** Not retried automatically: an uncertain start must be reconciled through execution history. */
-export async function executeWorkflow(workflowId: string, inputData: Record<string, string>): Promise<{ executionId: string }> {
+export async function executeWorkflow(
+  workflowId: string,
+  inputData: Record<string, string>,
+): Promise<{ executionId: string }> {
   const operation = "start Graph8 workflow";
   const json = await graph8.post(path`/workflows/${workflowId}/execute`, {
     operation,
     body: { input_data: inputData },
     timeoutMs: 30_000,
   });
-  const res = parseResponse(z.object({ execution_id: z.string() }), json, operation);
+  const res = parseResponse(
+    z.object({ execution_id: z.string() }),
+    json,
+    operation,
+  );
   return { executionId: res.execution_id };
 }
 
 export async function getExecution(executionId: string): Promise<Execution> {
   const operation = "read workflow execution";
-  const json = await graph8.get(path`/workflows/executions/${executionId}`, { operation });
+  const json = await graph8.get(path`/workflows/executions/${executionId}`, {
+    operation,
+  });
   return toExecution(parseResponse(ExecutionDto, json, operation));
 }
 
-export async function listRecentExecutions(workflowId: string, limit = 25): Promise<Execution[]> {
+export async function listRecentExecutions(
+  workflowId: string,
+  limit = 25,
+): Promise<Execution[]> {
   const operation = "list workflow executions";
-  const json = await graph8.get("/workflows/executions", { operation, query: { action_id: workflowId, limit } });
-  return parseResponse(z.object({ executions: z.array(ExecutionDto) }), json, operation).executions.map(toExecution);
+  const json = await graph8.get("/workflows/executions", {
+    operation,
+    query: { action_id: workflowId, limit },
+  });
+  return parseResponse(
+    z.object({ executions: z.array(ExecutionDto) }),
+    json,
+    operation,
+  ).executions.map(toExecution);
 }

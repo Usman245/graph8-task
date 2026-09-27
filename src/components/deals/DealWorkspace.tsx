@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/Button";
 import { Drawer } from "@/components/ui/Drawer";
 import { formatDate, formatMinor, formatMoney } from "@/components/ui/format";
 import { Notice, PageHeader, StepHeading } from "@/components/ui/PageHeader";
+import { ScopeCheckPanel } from "@/components/scope/ScopeCheckPanel";
 import { ApiError, api } from "@/lib/api/client-fetch";
 import type { DealContext, QuoteOption } from "@/lib/promiseguard/context";
 import type { SourceRef } from "@/lib/promiseguard/schemas";
@@ -295,6 +296,8 @@ export function DealWorkspace({ dealId }: { dealId: string }) {
         )}
         {"partial" in c.reviews && c.reviews.partial && <p className="text-xs text-muted">Showing the 100 most recent deal tasks.</p>}
       </section>
+
+      {!c.modeMismatch && <ScopeCheckPanel dealId={c.deal.id} isDemo={isDemo} />}
 
       <div className="fixed inset-x-0 bottom-0 z-40 px-3 pb-3">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-surface/90 px-5 py-3.5 shadow-[0_16px_48px_-16px_rgba(28,29,31,.35)] backdrop-blur-md">

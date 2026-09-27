@@ -30,22 +30,50 @@ export type MemoryReview = {
 
 export type DealMemory = { reviewCount: number; reviews: MemoryReview[] };
 
-const COMMITMENT_KEYS = /^(commitments?|promises?|seller_commitments|our_commitments|agreed_next_steps|next_steps|action_items)$/i;
-const TEXT_KEYS = ["commitment", "text", "description", "content", "summary", "title", "item"];
-const OWNER_KEYS = ["owner", "side", "by", "made_by", "speaker", "party", "owner_side"];
-const SELLER_WORDS = /^(seller|us|we|our side|rep|sales|internal|vendor|agency|host)$/i;
-const BUYER_WORDS = /^(buyer|them|they|customer|client|prospect|external|attendee)$/i;
+const COMMITMENT_KEYS =
+  /^(commitments?|promises?|seller_commitments|our_commitments|agreed_next_steps|next_steps|action_items)$/i;
+const TEXT_KEYS = [
+  "commitment",
+  "text",
+  "description",
+  "content",
+  "summary",
+  "title",
+  "item",
+];
+const OWNER_KEYS = [
+  "owner",
+  "side",
+  "by",
+  "made_by",
+  "speaker",
+  "party",
+  "owner_side",
+];
+const SELLER_WORDS =
+  /^(seller|us|we|our side|rep|sales|internal|vendor|agency|host)$/i;
+const BUYER_WORDS =
+  /^(buyer|them|they|customer|client|prospect|external|attendee)$/i;
 
-const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
+const str = (v: unknown) =>
+  typeof v === "string" && v.trim() ? v.trim() : null;
 
 function toCommitment(item: unknown): MemoryCommitment | null {
-  if (typeof item === "string") return item.trim() ? { text: item.trim(), side: "unknown", owner: null } : null;
+  if (typeof item === "string")
+    return item.trim()
+      ? { text: item.trim(), side: "unknown", owner: null }
+      : null;
   if (!item || typeof item !== "object") return null;
   const rec = item as Record<string, unknown>;
   const text = TEXT_KEYS.map((k) => str(rec[k])).find(Boolean);
   if (!text) return null;
   const owner = OWNER_KEYS.map((k) => str(rec[k])).find(Boolean) ?? null;
-  const side = owner && SELLER_WORDS.test(owner) ? "seller" : owner && BUYER_WORDS.test(owner) ? "buyer" : "unknown";
+  const side =
+    owner && SELLER_WORDS.test(owner)
+      ? "seller"
+      : owner && BUYER_WORDS.test(owner)
+        ? "buyer"
+        : "unknown";
   return { text, side, owner };
 }
 
@@ -57,7 +85,8 @@ function collect(value: unknown, depth: number, out: MemoryCommitment[]) {
         const c = toCommitment(item);
         if (c) out.push(c);
       }
-    } else if (v && typeof v === "object" && !Array.isArray(v)) collect(v, depth + 1, out);
+    } else if (v && typeof v === "object" && !Array.isArray(v))
+      collect(v, depth + 1, out);
   }
 }
 

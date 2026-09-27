@@ -31,7 +31,10 @@ const FOLD: Record<string, string> = {
 };
 
 /** Exact match first, then one ignoring only whitespace runs and quote/dash variants. Offsets refer to the original text. */
-function locateExcerpt(text: string, excerpt: string): { start: number; end: number } | null {
+export function locateExcerpt(
+  text: string,
+  excerpt: string,
+): { start: number; end: number } | null {
   const needle = excerpt.trim();
   if (!needle) return null;
   const exact = text.indexOf(needle);
@@ -62,7 +65,10 @@ function locateExcerpt(text: string, excerpt: string): { start: number; end: num
   return { start, end };
 }
 
-function parseModelJson(raw: string | null, fallbackParsed: unknown): unknown {
+export function parseModelJson(
+  raw: string | null,
+  fallbackParsed: unknown,
+): unknown {
   if (raw != null) {
     try {
       return JSON.parse(raw);
@@ -71,7 +77,8 @@ function parseModelJson(raw: string | null, fallbackParsed: unknown): unknown {
     }
   }
   // Graph8's parse_json node tolerates fences/prose; its output still goes through the same schema.
-  if (fallbackParsed && typeof fallbackParsed === "object") return fallbackParsed;
+  if (fallbackParsed && typeof fallbackParsed === "object")
+    return fallbackParsed;
   return undefined;
 }
 
@@ -83,11 +90,20 @@ export function validateModelOutput(input: {
   maxFindings: number;
 }): ValidationResult {
   const json = parseModelJson(input.raw, input.fallbackParsed);
-  if (json === undefined) return { ok: false, code: "unparseable", message: "The comparison did not return valid JSON." };
+  if (json === undefined)
+    return {
+      ok: false,
+      code: "unparseable",
+      message: "The comparison did not return valid JSON.",
+    };
 
   const parsed = ModelOutputSchema.safeParse(json);
   if (!parsed.success) {
-    return { ok: false, code: "schema_mismatch", message: "The comparison output did not match the expected structure." };
+    return {
+      ok: false,
+      code: "schema_mismatch",
+      message: "The comparison output did not match the expected structure.",
+    };
   }
 
   const docs = new Map(input.documents.map((d) => [d.id, d]));
@@ -104,7 +120,8 @@ export function validateModelOutput(input: {
   }
 
   for (const f of items) {
-    const reject = (reason: string) => rejected.push({ commitment: f.commitment, reason });
+    const reject = (reason: string) =>
+      rejected.push({ commitment: f.commitment, reason });
 
     const sales: Citation[] = [];
     let salesError: string | null = null;
@@ -119,7 +136,11 @@ export function validateModelOutput(input: {
         salesError = "A sales excerpt does not appear in the cited document.";
         break;
       }
-      sales.push({ documentId: d.id, excerpt: d.text.slice(loc.start, loc.end), ...loc });
+      sales.push({
+        documentId: d.id,
+        excerpt: d.text.slice(loc.start, loc.end),
+        ...loc,
+      });
     }
     if (salesError) {
       reject(salesError);
@@ -139,7 +160,11 @@ export function validateModelOutput(input: {
         quoteError = "A quote excerpt does not appear in the cited quote part.";
         break;
       }
-      quoteCites.push({ documentId: p.id, excerpt: p.text.slice(loc.start, loc.end), ...loc });
+      quoteCites.push({
+        documentId: p.id,
+        excerpt: p.text.slice(loc.start, loc.end),
+        ...loc,
+      });
     }
     if (quoteError) {
       reject(quoteError);
@@ -148,13 +173,18 @@ export function validateModelOutput(input: {
 
     const sides = sales.map((c) => docs.get(c.documentId)!.speakerSide);
     if (sides.every((s) => s === "buyer")) {
-      reject("Only buyer statements were cited, so this is not a seller commitment.");
+      reject(
+        "Only buyer statements were cited, so this is not a seller commitment.",
+      );
       continue;
     }
 
     let coverage: Coverage = f.coverage;
     const adjustments: string[] = [];
-    if ((coverage === "covered" || coverage === "conflict") && quoteCites.length === 0) {
+    if (
+      (coverage === "covered" || coverage === "conflict") &&
+      quoteCites.length === 0
+    ) {
       reject(`Marked ${coverage} without verified quote evidence.`);
       continue;
     }
@@ -164,7 +194,9 @@ export function validateModelOutput(input: {
     }
     if (coverage === "missing" && !input.quote.textComplete) {
       coverage = "needs_review";
-      adjustments.push("The quote text is incomplete, so absence cannot be confirmed.");
+      adjustments.push(
+        "The quote text is incomplete, so absence cannot be confirmed.",
+      );
     }
 
     const id = `f_${shortHash({ c: f.commitment.trim().toLowerCase(), d: sales[0].documentId, s: sales[0].start })}`;
@@ -189,7 +221,9 @@ export function validateModelOutput(input: {
               level: f.commercial_risk.level,
               riskTypes: f.commercial_risk.risk_types,
               reason: f.commercial_risk.reason.trim(),
-              missingInformation: f.commercial_risk.missing_information.map((item) => item.trim()).filter(Boolean),
+              missingInformation: f.commercial_risk.missing_information
+                .map((item) => item.trim())
+                .filter(Boolean),
               recommendedClause: f.commercial_risk.recommended_clause.trim(),
               // Enforce the documented rule even if the model returns an inconsistent boolean.
               requiresApproval: f.commercial_risk.level === "high",

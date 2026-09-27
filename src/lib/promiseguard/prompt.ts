@@ -1,14 +1,15 @@
-// Versioned comparison prompt and the model output contract.
-// Plain module (no aliases, no server-only) so setup scripts can import it directly.
-// The template uses Graph8 single-brace variables; it must contain no other braces.
-
 export const PROMPT_VERSION = "pg-v4" as const;
 /** Graph8 skills default to max_tokens 1000 (verified), which truncates larger reports. */
 export const MAX_OUTPUT_TOKENS = 4000;
 export const SKILL_NAME = "PromiseGuard Compare v1";
 export const WORKFLOW_NAME = "PromiseGuard Compare Workflow v1";
 
-export const PROMPT_VARIABLES = ["context_json", "sources_json", "quote_json", "output_schema_json"] as const;
+export const PROMPT_VARIABLES = [
+  "context_json",
+  "sources_json",
+  "quote_json",
+  "output_schema_json",
+] as const;
 
 export const PROMPT_TEMPLATE = `You review sales commitments against a selected quotation.
 
@@ -77,11 +78,28 @@ export const MODEL_OUTPUT_SCHEMA = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["commitment", "category", "coverage", "reason", "conditions", "sales_evidence", "quote_evidence", "suggested_action", "commercial_risk"],
+        required: [
+          "commitment",
+          "category",
+          "coverage",
+          "reason",
+          "conditions",
+          "sales_evidence",
+          "quote_evidence",
+          "suggested_action",
+          "commercial_risk",
+        ],
         properties: {
-          commitment: { type: "string", description: "Short restatement of the seller commitment" },
-          category: { enum: ["scope", "timeline", "support", "price", "other"] },
-          coverage: { enum: ["covered", "missing", "conflict", "needs_review"] },
+          commitment: {
+            type: "string",
+            description: "Short restatement of the seller commitment",
+          },
+          category: {
+            enum: ["scope", "timeline", "support", "price", "other"],
+          },
+          coverage: {
+            enum: ["covered", "missing", "conflict", "needs_review"],
+          },
           reason: { type: "string", description: "One or two sentences" },
           conditions: { type: "array", items: { type: "string" } },
           sales_evidence: {
@@ -90,7 +108,10 @@ export const MODEL_OUTPUT_SCHEMA = {
             items: {
               type: "object",
               required: ["document_id", "excerpt"],
-              properties: { document_id: { type: "string" }, excerpt: { type: "string" } },
+              properties: {
+                document_id: { type: "string" },
+                excerpt: { type: "string" },
+              },
             },
           },
           quote_evidence: {
@@ -98,23 +119,51 @@ export const MODEL_OUTPUT_SCHEMA = {
             items: {
               type: "object",
               required: ["part_id", "excerpt"],
-              properties: { part_id: { type: "string" }, excerpt: { type: "string" } },
+              properties: {
+                part_id: { type: "string" },
+                excerpt: { type: "string" },
+              },
             },
           },
           suggested_action: { type: "string" },
           commercial_risk: {
             type: "object",
             additionalProperties: false,
-            required: ["level", "risk_types", "reason", "missing_information", "recommended_clause", "requires_approval"],
+            required: [
+              "level",
+              "risk_types",
+              "reason",
+              "missing_information",
+              "recommended_clause",
+              "requires_approval",
+            ],
             properties: {
               level: { enum: ["low", "medium", "high", "unknown"] },
               risk_types: {
                 type: "array",
-                items: { enum: ["guarantee", "undefined_metric", "unbounded_scope", "dependency", "timeline", "pricing", "other"] },
+                items: {
+                  enum: [
+                    "guarantee",
+                    "undefined_metric",
+                    "unbounded_scope",
+                    "dependency",
+                    "timeline",
+                    "pricing",
+                    "other",
+                  ],
+                },
               },
-              reason: { type: "string", description: "Grounded commercial or delivery-risk explanation under 35 words" },
+              reason: {
+                type: "string",
+                description:
+                  "Grounded commercial or delivery-risk explanation under 35 words",
+              },
               missing_information: { type: "array", items: { type: "string" } },
-              recommended_clause: { type: "string", description: "Safer measurable quote wording, or an empty string" },
+              recommended_clause: {
+                type: "string",
+                description:
+                  "Safer measurable quote wording, or an empty string",
+              },
               requires_approval: { type: "boolean" },
             },
           },

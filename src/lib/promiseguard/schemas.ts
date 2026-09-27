@@ -6,8 +6,16 @@ export const ModeSchema = z.enum(["demo", "live"]);
 export type Mode = z.infer<typeof ModeSchema>;
 
 // note = Graph8 deal note (written by the seller's team); memory = Graph8 deal memory (AI summary of meeting reviews).
-export const SourceKindSchema = z.enum(["sample", "email", "meeting", "note", "memory"]);
-export const SourceRefSchema = z.object({ kind: SourceKindSchema, id: z.string().min(1).max(200) }).strict();
+export const SourceKindSchema = z.enum([
+  "sample",
+  "email",
+  "meeting",
+  "note",
+  "memory",
+]);
+export const SourceRefSchema = z
+  .object({ kind: SourceKindSchema, id: z.string().min(1).max(200) })
+  .strict();
 export type SourceRef = z.infer<typeof SourceRefSchema>;
 export const refKey = (r: SourceRef) => `${r.kind}:${r.id}`;
 
@@ -39,10 +47,23 @@ export type QuoteDocument = {
 };
 
 const CATEGORIES = ["scope", "timeline", "support", "price", "other"] as const;
-export const COVERAGES = ["covered", "missing", "conflict", "needs_review"] as const;
+export const COVERAGES = [
+  "covered",
+  "missing",
+  "conflict",
+  "needs_review",
+] as const;
 export type Coverage = (typeof COVERAGES)[number];
 export const RISK_LEVELS = ["low", "medium", "high", "unknown"] as const;
-const RISK_TYPES = ["guarantee", "undefined_metric", "unbounded_scope", "dependency", "timeline", "pricing", "other"] as const;
+const RISK_TYPES = [
+  "guarantee",
+  "undefined_metric",
+  "unbounded_scope",
+  "dependency",
+  "timeline",
+  "pricing",
+  "other",
+] as const;
 export type RiskLevel = (typeof RISK_LEVELS)[number];
 
 const ModelCommercialRiskSchema = z.object({
@@ -64,8 +85,23 @@ export const ModelOutputSchema = z.object({
       coverage: z.enum(COVERAGES),
       reason: z.string().max(1200),
       conditions: z.array(z.string().max(400)).max(8),
-      sales_evidence: z.array(z.object({ document_id: z.string(), excerpt: z.string().min(1).max(1500) })).min(1).max(6),
-      quote_evidence: z.array(z.object({ part_id: z.string(), excerpt: z.string().min(1).max(1500) })).max(6),
+      sales_evidence: z
+        .array(
+          z.object({
+            document_id: z.string(),
+            excerpt: z.string().min(1).max(1500),
+          }),
+        )
+        .min(1)
+        .max(6),
+      quote_evidence: z
+        .array(
+          z.object({
+            part_id: z.string(),
+            excerpt: z.string().min(1).max(1500),
+          }),
+        )
+        .max(6),
       suggested_action: z.string().max(600),
       // Optional while an execution started under pg-v3 is still finishing during deployment.
       commercial_risk: ModelCommercialRiskSchema.optional(),
@@ -116,7 +152,14 @@ const HumanDecisionSchema = z.object({
   at: z.string(),
 });
 
-const RUN_STATES = ["preparing", "running", "completed", "failed", "start_unknown", "stale"] as const;
+const RUN_STATES = [
+  "preparing",
+  "running",
+  "completed",
+  "failed",
+  "start_unknown",
+  "stale",
+] as const;
 
 const DocumentInfoSchema = z.object({
   source: z.string(),
@@ -172,7 +215,12 @@ export type ReviewManifest = z.infer<typeof ReviewManifestSchema>;
 export type SummaryCounts = Record<Coverage, number>;
 
 export function summarize(findings: Finding[]): SummaryCounts {
-  const counts: SummaryCounts = { covered: 0, missing: 0, conflict: 0, needs_review: 0 };
+  const counts: SummaryCounts = {
+    covered: 0,
+    missing: 0,
+    conflict: 0,
+    needs_review: 0,
+  };
   for (const f of findings) counts[f.coverage] += 1;
   return counts;
 }

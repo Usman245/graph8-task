@@ -24,12 +24,24 @@ export function isDemoDeal(deal: Pick<Deal, "name">): boolean {
 /** Demo mode works only on "[PromiseGuard Demo]" deals; live mode never uses them. */
 export function assertDealMatchesMode(deal: Deal, mode: Mode) {
   if (mode === "demo" && !env().PROMISEGUARD_DEMO_ENABLED) {
-    throw new AppRequestError("demo_disabled", "Demo mode is disabled on this server.", 403);
+    throw new AppRequestError(
+      "demo_disabled",
+      "Demo mode is disabled on this server.",
+      403,
+    );
   }
   if (mode === "demo" && !isDemoDeal(deal)) {
-    throw new AppRequestError("mode_mismatch", "Demo mode only runs on [PromiseGuard Demo] deals. Switch to Live mode for real deals.", 409);
+    throw new AppRequestError(
+      "mode_mismatch",
+      "Demo mode only runs on [PromiseGuard Demo] deals. Switch to Live mode for real deals.",
+      409,
+    );
   }
   if (mode === "live" && isDemoDeal(deal)) {
-    throw new AppRequestError("mode_mismatch", "This is a [PromiseGuard Demo] deal. Switch to Demo mode to review it.", 409);
+    throw new AppRequestError(
+      "mode_mismatch",
+      "This is a [PromiseGuard Demo] deal. Switch to Demo mode to review it.",
+      409,
+    );
   }
 }

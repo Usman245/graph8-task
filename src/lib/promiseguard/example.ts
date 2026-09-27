@@ -17,8 +17,13 @@ export async function findExampleReview(): Promise<string | null> {
     const deal = deals.items.find((d) => d.name === exampleName);
     if (!deal) return null;
     const { items } = await listReviewSummaries(deal.id);
-    const completed = items.filter((r) => r.runState === "completed" && r.mode === "demo");
-    return (completed.find((r) => r.coverageComplete) ?? completed[0])?.taskId ?? null;
+    const completed = items.filter(
+      (r) => r.runState === "completed" && r.mode === "demo",
+    );
+    return (
+      (completed.find((r) => r.coverageComplete) ?? completed[0])?.taskId ??
+      null
+    );
   } catch {
     return null;
   }

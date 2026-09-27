@@ -37,12 +37,24 @@ function toNote(n: z.infer<typeof NoteDto>): DealNote {
 export async function listDealNotes(dealId: string): Promise<DealNote[]> {
   const operation = "list deal notes";
   const json = await graph8.get(path`/deals/${dealId}/notes`, { operation });
-  return parseResponse(z.object({ data: z.array(NoteDto) }), json, operation).data.map(toNote);
+  return parseResponse(
+    z.object({ data: z.array(NoteDto) }),
+    json,
+    operation,
+  ).data.map(toNote);
 }
 
 /** Not retried: a note with an uncertain outcome is reported, never written twice. */
-export async function createDealNote(dealId: string, content: string): Promise<DealNote> {
+export async function createDealNote(
+  dealId: string,
+  content: string,
+): Promise<DealNote> {
   const operation = "create deal note";
-  const json = await graph8.post(path`/deals/${dealId}/notes`, { operation, body: { content } });
-  return toNote(parseResponse(z.object({ data: NoteDto }), json, operation).data);
+  const json = await graph8.post(path`/deals/${dealId}/notes`, {
+    operation,
+    body: { content },
+  });
+  return toNote(
+    parseResponse(z.object({ data: NoteDto }), json, operation).data,
+  );
 }

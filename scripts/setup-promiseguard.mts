@@ -11,6 +11,7 @@
 //   webhook   register the Graph8 webhook (quote.created/updated/sent) that drives Quote Guard autopilot.
 //             Needs PROMISEGUARD_PUBLIC_URL (public https URL of this app) and PROMISEGUARD_WEBHOOK_TOKEN.
 //   webhook:off   deactivate that webhook
+//   scope     Scope Creep Guard skill + workflow (prints GRAPH8_SCOPE_WORKFLOW_ID)
 //
 // Reruns reuse existing records (by stored ID, then by name). Nothing is sent: no emails, no quote sends.
 // Non-secret IDs are written to graph8/promiseguard-setup.json.
@@ -25,6 +26,7 @@ import {
   WORKFLOW_NAME,
 } from "../src/lib/promiseguard/prompt.ts";
 import { DEMO_SCENARIOS, type DemoScenario } from "../src/lib/promiseguard/sample-data.ts";
+import { SCOPE_PROMPT_TEMPLATE, SCOPE_SKILL_NAME, SCOPE_WORKFLOW_NAME } from "../src/lib/promiseguard/scope-prompt.ts";
 
 const STATE_FILE = "graph8/promiseguard-setup.json";
 const WORKFLOW_FILE = "graph8/promiseguard-workflow.json";
@@ -43,6 +45,8 @@ type State = {
   skillId?: string;
   modelId?: string;
   workflowId?: string | number;
+  scopeSkillId?: string;
+  scopeWorkflowId?: string | number;
   webhookId?: string;
   updatedAt?: string;
 };
@@ -195,13 +199,55 @@ async function exists(path: string, operation: string): Promise<boolean> {
   }
 }
 
-async function skill() {
+type AiDef = {
+  skillName: string;
+  workflowName: string;
+  prompt: string;
+  skillDescription: string;
+  workflowDescription: string;
+  detectedKeys: string[];
+  workflowFile: string | null;
+  get: () => { skillId?: string; workflowId?: string | number };
+  set: (ids: { skillId?: string; workflowId?: string | number }) => void;
+};
+
+const COMPARE: AiDef = {
+  skillName: SKILL_NAME,
+  workflowName: WORKFLOW_NAME,
+  prompt: PROMPT_TEMPLATE,
+  skillDescription: "PromiseGuard: compare seller commitments with the selected quotation evidence.",
+  workflowDescription: "PromiseGuard: runs the comparison skill on supplied evidence and returns parsed JSON.",
+  detectedKeys: ["findings", "truncated"],
+  workflowFile: WORKFLOW_FILE,
+  get: () => ({ skillId: state.skillId, workflowId: state.workflowId }),
+  set: (ids) => {
+    if (ids.skillId) state.skillId = ids.skillId;
+    if (ids.workflowId) state.workflowId = ids.workflowId;
+  },
+};
+
+const SCOPE: AiDef = {
+  skillName: SCOPE_SKILL_NAME,
+  workflowName: SCOPE_WORKFLOW_NAME,
+  prompt: SCOPE_PROMPT_TEMPLATE,
+  skillDescription: "PromiseGuard: find work requested after a quote was signed and classify it against the signed scope.",
+  workflowDescription: "PromiseGuard: runs the scope-watch skill on after-signing evidence and returns parsed JSON.",
+  detectedKeys: ["items", "truncated"],
+  workflowFile: null,
+  get: () => ({ skillId: state.scopeSkillId, workflowId: state.scopeWorkflowId }),
+  set: (ids) => {
+    if (ids.skillId) state.scopeSkillId = ids.skillId;
+    if (ids.workflowId) state.scopeWorkflowId = ids.workflowId;
+  },
+};
+
+async function skill(def: AiDef = COMPARE) {
   const models = await g8("GET", "/skills/models", { operation: "list models" });
   const available: string[] = (models?.models ?? []).map((m: any) => m.id);
   const modelId = process.env.GRAPH8_MODEL_ID || PREFERRED_MODELS.find((m) => available.includes(m)) || available[0];
   if (!modelId) throw new Error("No Graph8 LLM model available");
 
-  const llm_config = { model: modelId, prompt_template: PROMPT_TEMPLATE, temperature: 0.1, max_tokens: MAX_OUTPUT_TOKENS };
+  const llm_config = { model: modelId, prompt_template: def.prompt, temperature: 0.1, max_tokens: MAX_OUTPUT_TOKENS };
   const validation = await g8("POST", "/skills/validate", { operation: "validate skill", body: { runtime_type: "llm", llm_config } });
   console.log("skill validate:", JSON.stringify(validation));
   const vars: string[] = validation?.variables ?? [];
@@ -211,10 +257,10 @@ async function skill() {
   }
 
   const list = await g8("GET", "/skills", { operation: "list skills", query: { runtime_type: "llm" } });
-  const existing = (list?.actions ?? []).find((s: any) => s.name === SKILL_NAME && s.org_id !== "system");
+  const existing = (list?.actions ?? []).find((s: any) => s.name === def.skillName && s.org_id !== "system");
   const body = {
-    name: SKILL_NAME,
-    description: "PromiseGuard: compare seller commitments with the selected quotation evidence.",
+    name: def.skillName,
+    description: def.skillDescription,
     runtime_type: "llm",
     object_type: "Deal",
     category: "Analysis",
@@ -222,23 +268,23 @@ async function skill() {
     llm_config,
   };
   if (existing) {
-    state.skillId = existing.action_id;
+    def.set({ skillId: existing.action_id });
     // Always re-apply llm_config so model/prompt changes take effect; the update is idempotent.
     await g8("PUT", `/skills/${existing.action_id}`, { operation: "update skill", body: { llm_config } });
-    console.log(`skill: reuse ${state.skillId}, llm_config applied (model ${modelId})`);
+    console.log(`skill: reuse ${existing.action_id} (${def.skillName}), llm_config applied (model ${modelId})`);
   } else {
     const res = await g8("POST", "/skills", { operation: "create skill", body });
-    state.skillId = res?.action_id ?? res?.data?.action_id ?? res?.id;
-    console.log(`skill: created ${state.skillId} (response keys: ${Object.keys(res ?? {}).join(",")})`);
+    def.set({ skillId: res?.action_id ?? res?.data?.action_id ?? res?.id });
+    console.log(`skill: created ${def.get().skillId} (${def.skillName})`);
   }
   state.modelId = modelId;
   save();
 }
 
-function workflowConfig(skillId: string) {
+function workflowConfig(skillId: string, def: AiDef) {
   return {
     start_node_id: "trigger_1",
-    metadata: { name: WORKFLOW_NAME, version: 1 },
+    metadata: { name: def.workflowName, version: 1 },
     settings: { stop_on_failure: true },
     nodes: [
       {
@@ -265,7 +311,7 @@ function workflowConfig(skillId: string) {
         connections: ["parse_1"],
         config: {
           action_id: skillId,
-          action_name: SKILL_NAME,
+          action_name: def.skillName,
           action_type: "llm",
           input_mappings: PROMPT_VARIABLES.map((name) => ({ target_field: name, source_expression: `\${input.${name}}` })),
           on_error: "stop",
@@ -278,7 +324,7 @@ function workflowConfig(skillId: string) {
         name: "Parse comparison JSON",
         position: { x: 0, y: 320 },
         connections: [],
-        config: { input: "${compare_1.result}", on_error: "continue", detected_keys: ["findings", "truncated"] },
+        config: { input: "${compare_1.result}", on_error: "continue", detected_keys: def.detectedKeys },
       },
     ],
     // The executor follows node.connections; edges mirror them for the canvas.
@@ -289,32 +335,33 @@ function workflowConfig(skillId: string) {
   };
 }
 
-async function workflow() {
-  if (!state.skillId) throw new Error("Run the skill step first");
-  const config = workflowConfig(state.skillId);
+async function workflow(def: AiDef = COMPARE) {
+  const skillId = def.get().skillId;
+  if (!skillId) throw new Error(`Create the skill first (${def.skillName})`);
+  const config = workflowConfig(skillId, def);
   const validation = await g8("POST", "/workflows/validate", { operation: "validate workflow", body: { config } });
   console.log("workflow validate:", JSON.stringify(validation));
   if (validation?.errors?.length) throw new Error("Workflow validation failed; not saving");
 
   const list = await g8("GET", "/workflows", { operation: "list workflows" });
-  const existing = (list?.actions ?? []).find((w: any) => w.name === WORKFLOW_NAME);
+  const existing = (list?.actions ?? []).find((w: any) => w.name === def.workflowName);
   const body = {
-    name: WORKFLOW_NAME,
-    description: "PromiseGuard: runs the comparison skill on supplied evidence and returns parsed JSON.",
+    name: def.workflowName,
+    description: def.workflowDescription,
     category: "Analysis",
     object_type: "Deal",
     config,
   };
   if (existing) {
     await g8("PUT", `/workflows/${existing.action_id ?? existing.id}`, { operation: "update workflow", body: { config } });
-    state.workflowId = existing.action_id ?? existing.id;
-    console.log(`workflow: updated ${state.workflowId}`);
+    def.set({ workflowId: existing.action_id ?? existing.id });
+    console.log(`workflow: updated ${def.get().workflowId} (${def.workflowName})`);
   } else {
     const res = await g8("POST", "/workflows", { operation: "create workflow", body });
-    state.workflowId = res?.action_id ?? res?.id;
-    console.log(`workflow: created ${state.workflowId} (response keys: ${Object.keys(res ?? {}).join(",")})`);
+    def.set({ workflowId: res?.action_id ?? res?.id });
+    console.log(`workflow: created ${def.get().workflowId} (${def.workflowName})`);
   }
-  writeFileSync(WORKFLOW_FILE, JSON.stringify(config, null, 2) + "\n");
+  if (def.workflowFile) writeFileSync(def.workflowFile, JSON.stringify(config, null, 2) + "\n");
   save();
 }
 
@@ -357,7 +404,7 @@ async function webhook(active: boolean) {
 
 const steps = process.argv.slice(2);
 if (!steps.length) {
-  console.log("Usage: node scripts/setup-promiseguard.mts users|records|skill|workflow|all|webhook|webhook:off");
+  console.log("Usage: node scripts/setup-promiseguard.mts users|records|skill|workflow|all|webhook|webhook:off|scope");
   process.exit(1);
 }
 try {
@@ -367,7 +414,11 @@ try {
     else if (step.startsWith("records:")) await records(step.slice(8));
     else if (step === "skill") await skill();
     else if (step === "workflow") await workflow();
-    else if (step === "webhook") await webhook(true);
+    else if (step === "scope") {
+      await skill(SCOPE);
+      await workflow(SCOPE);
+      console.log(`\nAdd to .env:\nGRAPH8_SCOPE_WORKFLOW_ID=${state.scopeWorkflowId}`);
+    } else if (step === "webhook") await webhook(true);
     else if (step === "webhook:off") await webhook(false);
     else if (step === "all") {
       await records();

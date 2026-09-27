@@ -14,7 +14,7 @@ A short map of the codebase. For setup and running, see the [README](../README.m
 | `src/lib/graph8` | The only code that talks to Graph8: a server-only client and one adapter per resource |
 | `src/lib/promiseguard` | Product logic: reviews, evidence checks, send gate, fixes, delivery |
 | `src/lib/auth`, `src/lib/api` | Login session, route guard, and the `{ ok, data \| error }` response envelope |
-| `scripts` | `setup-promiseguard.mts` (Graph8 skill, workflow, demo data, webhook) and `setup-live-fixture.mts` |
+| `scripts` | `setup-promiseguard.mts` (Graph8 skills, workflows, demo data, webhook) and `setup-live-fixture.mts` |
 
 ## How a review works
 
@@ -38,6 +38,7 @@ A short map of the codebase. For setup and running, see the [README](../README.m
 | `guard.ts`, `gate-rules.ts`, `freshness.ts` | Quote Guard: automatic reviews, the send gate, and "is this review still current?" |
 | `fixes.ts` | Fix in quote, and buyer clarification notes |
 | `delivery.ts`, `delivery-schema.ts` | Promise Handoff and the Delivery board |
+| `scope.ts`, `scope-rules.ts`, `scope-prompt.ts`, `scope-labels.ts` | Scope Creep Guard: after-signing checks, evidence rules, AI prompt, change orders |
 | `mode.ts`, `sample-data.ts` | Demo vs Live mode, and the labeled demo scenarios |
 | `context.ts`, `capabilities.ts`, `example.ts` | Data for the deal page, the Connection checks, and the demo example link |
 
@@ -55,6 +56,7 @@ A short map of the codebase. For setup and running, see the [README](../README.m
 |---|---|
 | Demo deals, quotes, or conversations | `sample-data.ts`, then `node scripts/setup-promiseguard.mts records` |
 | What the AI checks | `prompt.ts`, then `node scripts/setup-promiseguard.mts skill` |
+| What the scope check looks for | `scope-prompt.ts`, then `node scripts/setup-promiseguard.mts scope` |
 | When sending is blocked | `gate-rules.ts` |
 | A Graph8 endpoint or response shape | the matching file in `src/lib/graph8/adapters` |
 | Page layout or wording | the component in `src/components` |

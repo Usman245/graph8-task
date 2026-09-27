@@ -32,7 +32,12 @@ export class Graph8Error extends Error {
     this.code = opts.code;
     this.operation = opts.operation;
     this.status = opts.status ?? null;
-    this.retryable = ["rate_limited", "server_error", "timeout", "network"].includes(opts.code);
+    this.retryable = [
+      "rate_limited",
+      "server_error",
+      "timeout",
+      "network",
+    ].includes(opts.code);
     this.details = opts.details;
   }
 }

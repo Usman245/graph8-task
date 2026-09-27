@@ -2,14 +2,24 @@
 
 import type { Coverage, Finding, ReviewManifest } from "./schemas";
 
-export const BLOCKING_COVERAGE: Coverage[] = ["conflict", "missing", "needs_review"];
+export const BLOCKING_COVERAGE: Coverage[] = [
+  "conflict",
+  "missing",
+  "needs_review",
+];
 
 /** Open = a blocking gap or high-risk promise whose latest decision is not dismissed or resolved ("confirmed" does not clear it). */
-export function openFindings(m: Pick<ReviewManifest, "report" | "humanDecisions">): Finding[] {
+export function openFindings(
+  m: Pick<ReviewManifest, "report" | "humanDecisions">,
+): Finding[] {
   const last = new Map<string, string>();
   for (const d of m.humanDecisions) last.set(d.findingId, d.decision);
   return (m.report ?? []).filter((f) => {
-    if (!BLOCKING_COVERAGE.includes(f.coverage) && !f.commercialRisk?.requiresApproval) return false;
+    if (
+      !BLOCKING_COVERAGE.includes(f.coverage) &&
+      !f.commercialRisk?.requiresApproval
+    )
+      return false;
     const decision = last.get(f.id);
     return decision !== "dismissed" && decision !== "resolved";
   });

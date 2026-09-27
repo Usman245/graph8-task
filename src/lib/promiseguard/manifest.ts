@@ -1,7 +1,11 @@
 // Review manifest stored in a Graph8 task description (application convention, not a Graph8 field).
 // Round-trip verified exactly up to 48 KB on 2026-09-26.
 
-import { ReviewManifestSchema, summarize, type ReviewManifest } from "./schemas";
+import {
+  ReviewManifestSchema,
+  summarize,
+  type ReviewManifest,
+} from "./schemas";
 
 const MANIFEST_BEGIN = "PG_MANIFEST_V1_BEGIN";
 const MANIFEST_END = "PG_MANIFEST_V1_END";
@@ -12,11 +16,20 @@ export const DEMO_TITLE_PREFIX = "[PromiseGuard Demo]";
 
 type ManifestParse =
   | { ok: true; manifest: ReviewManifest }
-  | { ok: false; reason: "missing" | "unsupported_version" | "invalid"; message: string };
+  | {
+      ok: false;
+      reason: "missing" | "unsupported_version" | "invalid";
+      message: string;
+    };
 
-export function reviewTitle(m: Pick<ReviewManifest, "mode" | "quoteLabel" | "requestId">): string {
+export function reviewTitle(
+  m: Pick<ReviewManifest, "mode" | "quoteLabel" | "requestId">,
+): string {
   const prefix = m.mode === "demo" ? DEMO_TITLE_PREFIX : REVIEW_TITLE_PREFIX;
-  return `${prefix} Review ${m.quoteLabel.replace(/^\[PromiseGuard Demo\]\s*/, "")} [${m.requestId.slice(0, 8)}]`.slice(0, 250);
+  return `${prefix} Review ${m.quoteLabel.replace(/^\[PromiseGuard Demo\]\s*/, "")} [${m.requestId.slice(0, 8)}]`.slice(
+    0,
+    250,
+  );
 }
 
 function plural(n: number, one: string, many: string) {
@@ -24,7 +37,11 @@ function plural(n: number, one: string, many: string) {
 }
 
 function humanSummary(m: ReviewManifest): string {
-  const lines = ["PromiseGuard quotation review", `Selected quote: ${m.quoteLabel}`, `Deal: ${m.dealName}`];
+  const lines = [
+    "PromiseGuard quotation review",
+    `Selected quote: ${m.quoteLabel}`,
+    `Deal: ${m.dealName}`,
+  ];
   lines.push(
     m.mode === "demo"
       ? "Evidence: Sample conversation (synthetic demonstration content, not a Graph8 email or transcript)."
@@ -32,19 +49,31 @@ function humanSummary(m: ReviewManifest): string {
   );
   if (m.report) {
     const c = summarize(m.report);
-    const assessed = m.report.flatMap((finding) => (finding.commercialRisk ? [finding.commercialRisk] : []));
+    const assessed = m.report.flatMap((finding) =>
+      finding.commercialRisk ? [finding.commercialRisk] : [],
+    );
     const highRisk = assessed.filter((risk) => risk.level === "high").length;
-    const mediumRisk = assessed.filter((risk) => risk.level === "medium").length;
+    const mediumRisk = assessed.filter(
+      (risk) => risk.level === "medium",
+    ).length;
     lines.push(
       `Result: ${plural(c.conflict, "conflict", "conflicts")}, ${plural(c.missing, "missing item", "missing items")}, ` +
         `${plural(c.covered, "covered commitment", "covered commitments")}, ${plural(c.needs_review, "item needing review", "items needing review")}.`,
     );
-    if (assessed.length) lines.push(`Feasibility: ${plural(highRisk, "high-risk promise", "high-risk promises")}, ${plural(mediumRisk, "medium-risk promise", "medium-risk promises")}.`);
+    if (assessed.length)
+      lines.push(
+        `Feasibility: ${plural(highRisk, "high-risk promise", "high-risk promises")}, ${plural(mediumRisk, "medium-risk promise", "medium-risk promises")}.`,
+      );
   } else {
     lines.push(`Status: ${m.runState}`);
   }
-  if (!m.quoteTextComplete) lines.push("Limitation: quote text incomplete; absence of a clause is not confirmed.");
-  lines.push("Decision support only; not a determination of contractual liability.");
+  if (!m.quoteTextComplete)
+    lines.push(
+      "Limitation: quote text incomplete; absence of a clause is not confirmed.",
+    );
+  lines.push(
+    "Decision support only; not a determination of contractual liability.",
+  );
   return lines.join("\n");
 }
 
@@ -52,17 +81,28 @@ export function buildDescription(m: ReviewManifest): string {
   return `${humanSummary(m)}\n\n${MANIFEST_BEGIN}\n${JSON.stringify(m)}\n${MANIFEST_END}`;
 }
 
-export function parseDescription(description: string | null | undefined): ManifestParse {
+export function parseDescription(
+  description: string | null | undefined,
+): ManifestParse {
   const text = description ?? "";
   const start = text.indexOf(MANIFEST_BEGIN);
   const end = text.indexOf(MANIFEST_END, start + 1);
-  if (start < 0 || end < 0) return { ok: false, reason: "missing", message: "This task has no PromiseGuard manifest." };
+  if (start < 0 || end < 0)
+    return {
+      ok: false,
+      reason: "missing",
+      message: "This task has no PromiseGuard manifest.",
+    };
   const body = text.slice(start + MANIFEST_BEGIN.length, end).trim();
   let json: unknown;
   try {
     json = JSON.parse(body);
   } catch {
-    return { ok: false, reason: "invalid", message: "The stored PromiseGuard manifest is not valid JSON." };
+    return {
+      ok: false,
+      reason: "invalid",
+      message: "The stored PromiseGuard manifest is not valid JSON.",
+    };
   }
   const version = (json as { schemaVersion?: unknown })?.schemaVersion;
   if (version !== 1) {
@@ -73,7 +113,12 @@ export function parseDescription(description: string | null | undefined): Manife
     };
   }
   const parsed = ReviewManifestSchema.safeParse(json);
-  if (!parsed.success) return { ok: false, reason: "invalid", message: "The stored PromiseGuard manifest failed validation." };
+  if (!parsed.success)
+    return {
+      ok: false,
+      reason: "invalid",
+      message: "The stored PromiseGuard manifest failed validation.",
+    };
   return { ok: true, manifest: parsed.data };
 }
 
@@ -81,18 +126,36 @@ export function manifestBytes(m: ReviewManifest): number {
   return Buffer.byteLength(buildDescription(m), "utf8");
 }
 
-type IssueMarker = { app: "promiseguard"; v: 1; reviewTaskId: string; findingId: string; requestId: string };
+type IssueMarker = {
+  app: "promiseguard";
+  v: 1;
+  reviewTaskId: string;
+  findingId: string;
+  requestId: string;
+};
 
-export function issueMarkerLine(marker: Omit<IssueMarker, "app" | "v">): string {
+export function issueMarkerLine(
+  marker: Omit<IssueMarker, "app" | "v">,
+): string {
   return `${ISSUE_MARKER} ${JSON.stringify({ app: "promiseguard", v: 1, ...marker })}`;
 }
 
-export function parseIssueMarker(description: string | null | undefined): IssueMarker | null {
-  const line = (description ?? "").split("\n").find((l) => l.startsWith(`${ISSUE_MARKER} `));
+export function parseIssueMarker(
+  description: string | null | undefined,
+): IssueMarker | null {
+  const line = (description ?? "")
+    .split("\n")
+    .find((l) => l.startsWith(`${ISSUE_MARKER} `));
   if (!line) return null;
   try {
     const m = JSON.parse(line.slice(ISSUE_MARKER.length + 1));
-    if (m?.app === "promiseguard" && m.v === 1 && typeof m.reviewTaskId === "string" && typeof m.findingId === "string") return m;
+    if (
+      m?.app === "promiseguard" &&
+      m.v === 1 &&
+      typeof m.reviewTaskId === "string" &&
+      typeof m.findingId === "string"
+    )
+      return m;
   } catch {
     /* ignore */
   }

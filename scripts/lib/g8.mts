@@ -7,7 +7,7 @@ nextEnv.loadEnvConfig(process.cwd());
 const BASE = (process.env.GRAPH8_BASE_URL || "https://be.graph8.com/api/v1").replace(/\/$/, "");
 const KEY = process.env.GRAPH8_API_KEY;
 
-export class G8Error extends Error {
+class G8Error extends Error {
   readonly operation: string;
   readonly status: number;
   readonly body: unknown;
@@ -57,5 +57,3 @@ export function describeError(err: unknown): string {
   }
   return err instanceof Error ? err.message : String(err);
 }
-
-export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));

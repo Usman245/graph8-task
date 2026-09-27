@@ -71,3 +71,30 @@ export const FixBody = z.discriminatedUnion("kind", [
     })
     .strict(),
 ]);
+
+export const ScopeStartBody = z
+  .object({
+    dealId: z.string().min(1).max(100),
+    quoteId: z.string().min(1).max(100),
+    sourceRefs: z.array(SourceRefSchema).min(1).max(10),
+    requestId: z.uuid(),
+    mode: ModeSchema,
+  })
+  .strict();
+
+export const ScopeDecisionBody = z
+  .object({
+    decision: z.enum(["goodwill", "dismissed"]),
+    reason: z.string().max(1000),
+    expectedRevision: z.number().int().nonnegative(),
+  })
+  .strict();
+
+export const ChangeOrderBody = z
+  .object({
+    productName: z.string().trim().min(3).max(200),
+    description: z.string().trim().min(3).max(600),
+    priceMinor: z.number().int().min(0).max(100_000_000),
+    expectedRevision: z.number().int().nonnegative(),
+  })
+  .strict();

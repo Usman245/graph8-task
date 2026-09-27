@@ -11,18 +11,43 @@ import { listReviewSummaries, type ReviewSummary } from "./repository";
 import type { Mode } from "./schemas";
 import { findSourceCandidates, type CandidateScan } from "./sources";
 
-export type DealRow = Pick<Deal, "id" | "name" | "amount" | "currency" | "stageName" | "ownerName" | "updatedAt"> & {
+export type DealRow = Pick<
+  Deal,
+  | "id"
+  | "name"
+  | "amount"
+  | "currency"
+  | "stageName"
+  | "ownerName"
+  | "updatedAt"
+> & {
   companyName: string | null;
   primaryContact: string | null;
 };
 
-export type DealPage = { items: DealRow[]; page: number; hasNext: boolean; total: number; hiddenDemoDeals: number };
+export type DealPage = {
+  items: DealRow[];
+  page: number;
+  hasNext: boolean;
+  total: number;
+  hiddenDemoDeals: number;
+};
 
-export async function dealPage(mode: Mode, page: number, search: string): Promise<DealPage> {
+export async function dealPage(
+  mode: Mode,
+  page: number,
+  search: string,
+): Promise<DealPage> {
   const limit = 25;
   // Demo mode lists only "[PromiseGuard Demo]" deals; Live mode hides them.
-  const res = await listDeals({ page, limit, search: mode === "demo" ? search || DEMO_TITLE_PREFIX : search || undefined });
-  const keep = res.items.filter((d) => (mode === "demo" ? isDemoDeal(d) : !isDemoDeal(d)));
+  const res = await listDeals({
+    page,
+    limit,
+    search: mode === "demo" ? search || DEMO_TITLE_PREFIX : search || undefined,
+  });
+  const keep = res.items.filter((d) =>
+    mode === "demo" ? isDemoDeal(d) : !isDemoDeal(d),
+  );
   return {
     items: keep.map((d) => ({
       id: d.id,
@@ -72,7 +97,10 @@ export type DealContext = {
   comparisonReady: boolean;
 };
 
-export async function dealContext(dealId: string, mode: Mode): Promise<DealContext> {
+export async function dealContext(
+  dealId: string,
+  mode: Mode,
+): Promise<DealContext> {
   const deal = await getDeal(dealId);
   const dealIsDemo = isDemoDeal(deal);
   const modeMismatch =
@@ -84,31 +112,44 @@ export async function dealContext(dealId: string, mode: Mode): Promise<DealConte
 
   const [quoteResult, sources, reviews, status] = await Promise.all([
     findQuoteCandidates(deal),
-    modeMismatch ? Promise.resolve<CandidateScan>({ candidates: [], coverage: [], errors: [] }) : findSourceCandidates(deal, mode),
-    listReviewSummaries(deal.id).catch((err) => ({ error: err instanceof Graph8Error ? err.message : "Could not load previous reviews." })),
+    modeMismatch
+      ? Promise.resolve<CandidateScan>({
+          candidates: [],
+          coverage: [],
+          errors: [],
+        })
+      : findSourceCandidates(deal, mode),
+    listReviewSummaries(deal.id).catch((err) => ({
+      error:
+        err instanceof Graph8Error
+          ? err.message
+          : "Could not load previous reviews.",
+    })),
     getConnectionStatus(),
   ]);
 
   const maxQuoteChars = env().PROMISEGUARD_MAX_QUOTE_CHARS;
-  const quotes: QuoteOption[] = quoteResult.candidates.map(({ quote, linkage }) => {
-    const doc = quoteToDocument(quote, maxQuoteChars);
-    return {
-      id: quote.id,
-      label: doc.label,
-      number: quote.number,
-      title: quote.title,
-      status: quote.status,
-      totalMinor: quote.totalMinor,
-      currency: quote.currency,
-      createdAt: quote.createdAt,
-      sentAt: quote.sentAt,
-      linkage,
-      textComplete: doc.textComplete,
-      includedFields: doc.includedFields,
-      limitations: doc.limitations,
-      preview: doc.parts.map((p) => ({ path: p.path, text: p.text })),
-    };
-  });
+  const quotes: QuoteOption[] = quoteResult.candidates.map(
+    ({ quote, linkage }) => {
+      const doc = quoteToDocument(quote, maxQuoteChars);
+      return {
+        id: quote.id,
+        label: doc.label,
+        number: quote.number,
+        title: quote.title,
+        status: quote.status,
+        totalMinor: quote.totalMinor,
+        currency: quote.currency,
+        createdAt: quote.createdAt,
+        sentAt: quote.sentAt,
+        linkage,
+        textComplete: doc.textComplete,
+        includedFields: doc.includedFields,
+        limitations: doc.limitations,
+        preview: doc.parts.map((p) => ({ path: p.path, text: p.text })),
+      };
+    },
+  );
 
   return {
     mode,

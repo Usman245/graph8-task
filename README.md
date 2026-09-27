@@ -197,6 +197,30 @@ clearly labeled rehearsal on a draft quote and never accepts a quote, sends emai
 This is the product boundary: PromiseGuard protects the transition from sales promise to signed scope, then carries that scope
 into Graph8 work with an owner and deadline. It does not determine legal liability or independently verify that delivery occurred.
 
+## Scope Creep Guard: protect the margin after signing
+
+After a quote is signed, clients keep asking for "small extras", and someone says "sure, no problem". The Scope Creep
+Guard reads conversations dated **after** the signing date and checks each request for work against the signed quote:
+
+| Result | Meaning |
+|---|---|
+| **Agreed without payment** | Someone on the seller side agreed to extra work the signed quote does not cover |
+| **Requested, not agreed** | The client asked; nobody said yes yet |
+| **Needs review** | Unclear scope, agreement, or speaker |
+| **In scope** | A clause in the signed quote already covers it |
+
+Every item shows the exact request, the agreement, and the quote clause, verified like review findings. Actions:
+**Draft change order** (creates a *draft* Graph8 quote on the deal with the signer and billing details copied; never sent),
+**Accept as goodwill**, or **Dismiss** (both need a reason). Each check is saved as a `[PromiseGuard] Scope check` Graph8 task.
+
+- Where: the deal page, section "Scope Creep Guard", then `/scope/{taskId}` for the result.
+- Live mode needs a quote Graph8 marks **accepted**; only messages dated on or after `accepted_at` are read.
+- Demo mode: the **Harbor Yoga** deal has a signed date and two after-signing sample conversations (a class-schedule
+  page and Instagram posting agreed for free, a December newsletter not yet agreed, the logo already in scope). These
+  conversations are never used by the normal review, so Harbor Yoga stays *Clear to send*.
+- Setup: `node scripts/setup-promiseguard.mts scope` creates the Graph8 skill "PromiseGuard Scope Watch v1" and its
+  workflow, then set `GRAPH8_SCOPE_WORKFLOW_ID` (also on Vercel).
+
 ## Promise Feasibility: test the Graph8 AI risk layer
 
 Update the existing Graph8 skill and workflow after pulling this version:
@@ -298,6 +322,7 @@ Generate secrets (PowerShell or bash): `node -e "console.log(require('crypto').r
 node scripts/setup-promiseguard.mts skill workflow   # comparison skill (prompt pg-v4) + workflow, validated before saving
 node scripts/setup-promiseguard.mts records          # demo companies, contacts, deals, draft quotes (with billing details)
 node scripts/setup-promiseguard.mts records:bakery   # one scenario only (bakery, cafe, gym, dental, yoga)
+node scripts/setup-promiseguard.mts scope            # Scope Creep Guard skill + workflow (prints GRAPH8_SCOPE_WORKFLOW_ID)
 node scripts/setup-promiseguard.mts users            # team-member IDs for PROMISEGUARD_ASSIGNEES
 node scripts/setup-promiseguard.mts webhook          # Quote Guard autopilot (needs PUBLIC_URL + WEBHOOK_TOKEN)
 ```

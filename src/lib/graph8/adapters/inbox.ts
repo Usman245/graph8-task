@@ -68,8 +68,18 @@ function toThread(t: z.infer<typeof EmailThreadDto>): EmailThread {
 
 export async function listEmailThreads(page: number, pageSize: number) {
   const operation = "list email inbox";
-  const json = await graph8.get("/inbox", { operation, query: { channel: "email", page, page_size: pageSize } });
-  const res = parseResponse(z.object({ data: z.array(EmailThreadDto), pagination: PageEnvelope.nullish() }), json, operation);
+  const json = await graph8.get("/inbox", {
+    operation,
+    query: { channel: "email", page, page_size: pageSize },
+  });
+  const res = parseResponse(
+    z.object({
+      data: z.array(EmailThreadDto),
+      pagination: PageEnvelope.nullish(),
+    }),
+    json,
+    operation,
+  );
   return {
     items: res.data.map(toThread),
     hasNext: res.pagination?.has_next ?? false,
@@ -79,11 +89,20 @@ export async function listEmailThreads(page: number, pageSize: number) {
 
 export async function getEmailThread(replyId: string): Promise<EmailThread> {
   const operation = "read email thread";
-  const json = await graph8.get(path`/inbox/${replyId}`, { operation, query: { channel: "email" } });
-  return toThread(parseResponse(z.object({ data: EmailThreadDto }), json, operation).data);
+  const json = await graph8.get(path`/inbox/${replyId}`, {
+    operation,
+    query: { channel: "email" },
+  });
+  return toThread(
+    parseResponse(z.object({ data: EmailThreadDto }), json, operation).data,
+  );
 }
 
-const AttendeeDto = z.object({ email: z.string().nullish(), name: z.string().nullish(), organizer: z.boolean().nullish() });
+const AttendeeDto = z.object({
+  email: z.string().nullish(),
+  name: z.string().nullish(),
+  organizer: z.boolean().nullish(),
+});
 
 const MeetingDto = z.object({
   id: z.union([z.string(), z.number()]),
@@ -118,7 +137,10 @@ function toMeeting(m: z.infer<typeof MeetingDto>): Meeting {
     subject: m.subject ?? null,
     startTime: m.start_time ?? null,
     organizerEmail: m.organizer_email?.toLowerCase() ?? null,
-    attendees: (m.attendees ?? []).map((a) => ({ email: a.email?.toLowerCase() ?? null, name: a.name ?? null })),
+    attendees: (m.attendees ?? []).map((a) => ({
+      email: a.email?.toLowerCase() ?? null,
+      name: a.name ?? null,
+    })),
     transcriptStatus: m.transcript_status ?? null,
     transcriptText: m.transcript_text ?? null,
     transcriptRedacted: Boolean(m.transcript_redacted),
@@ -127,13 +149,26 @@ function toMeeting(m: z.infer<typeof MeetingDto>): Meeting {
   };
 }
 
-export async function listMeetingsForParticipant(email: string, page: number, pageSize: number) {
+export async function listMeetingsForParticipant(
+  email: string,
+  page: number,
+  pageSize: number,
+) {
   const operation = "list meetings";
   const json = await graph8.get("/inbox/meetings", {
     operation,
-    query: { participant_email: email, has_transcript: true, page, page_size: pageSize },
+    query: {
+      participant_email: email,
+      has_transcript: true,
+      page,
+      page_size: pageSize,
+    },
   });
-  const res = parseResponse(z.object({ data: z.array(MeetingDto), pagination: PageEnvelope.nullish() }), json, operation);
+  const res = parseResponse(
+    z.object({ data: z.array(MeetingDto), pagination: PageEnvelope.nullish() }),
+    json,
+    operation,
+  );
   return {
     items: res.data.map(toMeeting),
     hasNext: res.pagination?.has_next ?? false,
@@ -143,6 +178,10 @@ export async function listMeetingsForParticipant(email: string, page: number, pa
 
 export async function getMeeting(meetingId: string): Promise<Meeting> {
   const operation = "read meeting";
-  const json = await graph8.get(path`/inbox/meetings/${meetingId}`, { operation });
-  return toMeeting(parseResponse(z.object({ data: MeetingDto }), json, operation).data);
+  const json = await graph8.get(path`/inbox/meetings/${meetingId}`, {
+    operation,
+  });
+  return toMeeting(
+    parseResponse(z.object({ data: MeetingDto }), json, operation).data,
+  );
 }

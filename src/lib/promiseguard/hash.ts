@@ -15,4 +15,5 @@ export function sha256(value: unknown): string {
   return createHash("sha256").update(text, "utf8").digest("hex");
 }
 
-export const shortHash = (value: unknown, length = 12) => sha256(value).slice(0, length);
+export const shortHash = (value: unknown, length = 12) =>
+  sha256(value).slice(0, length);

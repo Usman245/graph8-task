@@ -1,15 +1,39 @@
 import "server-only";
 import { AppRequestError } from "@/lib/auth/guard";
 import { env } from "@/lib/env";
-import { createTask, getTask, listDealTasks, patchTask, type Task } from "@/lib/graph8/adapters/tasks";
+import {
+  createTask,
+  getTask,
+  listDealTasks,
+  patchTask,
+  type Task,
+} from "@/lib/graph8/adapters/tasks";
 import { Graph8Error } from "@/lib/graph8/errors";
-import { REVIEW_TAG, buildDescription, manifestBytes, parseDescription, reviewTitle } from "./manifest";
+import {
+  REVIEW_TAG,
+  buildDescription,
+  manifestBytes,
+  parseDescription,
+  reviewTitle,
+} from "./manifest";
 import { openFindings } from "./gate-rules";
-import { refKey, summarize, type ReviewManifest, type SummaryCounts, type SourceRef } from "./schemas";
+import {
+  refKey,
+  summarize,
+  type ReviewManifest,
+  type SummaryCounts,
+  type SourceRef,
+} from "./schemas";
 
-type LoadedReview = { task: Task; manifest: ReviewManifest | null; readOnlyReason: string | null };
+type LoadedReview = {
+  task: Task;
+  manifest: ReviewManifest | null;
+  readOnlyReason: string | null;
+};
 
-const isReviewTask = (t: Task) => t.tags.includes("promiseguard-review") || /^\[PromiseGuard( Demo)?\] Review /.test(t.title);
+const isReviewTask = (t: Task) =>
+  t.tags.includes("promiseguard-review") ||
+  /^\[PromiseGuard( Demo)?\] Review /.test(t.title);
 
 export async function loadReview(taskId: string): Promise<LoadedReview> {
   let task: Task;
@@ -17,33 +41,69 @@ export async function loadReview(taskId: string): Promise<LoadedReview> {
     task = await getTask(taskId);
   } catch (err) {
     if (err instanceof Graph8Error && err.code === "not_found") {
-      throw new AppRequestError("review_not_found", "This review task does not exist or is not accessible.", 404);
+      throw new AppRequestError(
+        "review_not_found",
+        "This review task does not exist or is not accessible.",
+        404,
+      );
     }
     throw err;
   }
-  if (!isReviewTask(task) || task.entityType !== "deal" || !task.entityId || task.parentTaskId) {
-    throw new AppRequestError("not_a_review", "This Graph8 task is not a PromiseGuard review.", 404);
+  if (
+    !isReviewTask(task) ||
+    task.entityType !== "deal" ||
+    !task.entityId ||
+    task.parentTaskId
+  ) {
+    throw new AppRequestError(
+      "not_a_review",
+      "This Graph8 task is not a PromiseGuard review.",
+      404,
+    );
   }
   const parsed = parseDescription(task.description);
   if (!parsed.ok) {
-    if (parsed.reason === "missing") throw new AppRequestError("not_a_review", parsed.message, 404);
+    if (parsed.reason === "missing")
+      throw new AppRequestError("not_a_review", parsed.message, 404);
     return { task, manifest: null, readOnlyReason: parsed.message };
   }
   const m = parsed.manifest;
-  if (m.dealId !== task.entityId || (m.reviewTaskId && m.reviewTaskId !== task.id)) {
-    throw new AppRequestError("manifest_mismatch", "The stored review does not match its Graph8 task.", 409);
+  if (
+    m.dealId !== task.entityId ||
+    (m.reviewTaskId && m.reviewTaskId !== task.id)
+  ) {
+    throw new AppRequestError(
+      "manifest_mismatch",
+      "The stored review does not match its Graph8 task.",
+      409,
+    );
   }
   return { task, manifest: m, readOnlyReason: null };
 }
 
-export function requireEditable(r: LoadedReview): { task: Task; manifest: ReviewManifest } {
-  if (!r.manifest) throw new AppRequestError("read_only", r.readOnlyReason ?? "This review is read-only.", 409);
+export function requireEditable(r: LoadedReview): {
+  task: Task;
+  manifest: ReviewManifest;
+} {
+  if (!r.manifest)
+    throw new AppRequestError(
+      "read_only",
+      r.readOnlyReason ?? "This review is read-only.",
+      409,
+    );
   return { task: r.task, manifest: r.manifest };
 }
 
 /** Conditional save (Graph8 returns 409 if the task changed); oversized reports are refused, never truncated. */
-export async function saveManifest(task: Task, next: ReviewManifest): Promise<{ task: Task; manifest: ReviewManifest }> {
-  const manifest: ReviewManifest = { ...next, reviewTaskId: task.id, revision: next.revision + 1 };
+export async function saveManifest(
+  task: Task,
+  next: ReviewManifest,
+): Promise<{ task: Task; manifest: ReviewManifest }> {
+  const manifest: ReviewManifest = {
+    ...next,
+    reviewTaskId: task.id,
+    revision: next.revision + 1,
+  };
   const bytes = manifestBytes(manifest);
   if (bytes > env().PROMISEGUARD_MAX_REPORT_BYTES) {
     throw new AppRequestError(
@@ -52,25 +112,50 @@ export async function saveManifest(task: Task, next: ReviewManifest): Promise<{ 
       413,
     );
   }
-  const updated = await patchTask(task.id, { description: buildDescription(manifest) }, task.updatedAt);
+  const updated = await patchTask(
+    task.id,
+    { description: buildDescription(manifest) },
+    task.updatedAt,
+  );
   return { task: updated, manifest };
 }
 
 export async function createReviewTask(m: ReviewManifest): Promise<Task> {
-  const tags = [REVIEW_TAG, "promiseguard-review", ...(m.mode === "demo" ? ["promiseguard-demo"] : [])];
+  const tags = [
+    REVIEW_TAG,
+    "promiseguard-review",
+    ...(m.mode === "demo" ? ["promiseguard-demo"] : []),
+  ];
   return createTask(
-    { title: reviewTitle(m), description: buildDescription(m), entity_type: "deal", entity_id: m.dealId, priority: 3, tags },
+    {
+      title: reviewTitle(m),
+      description: buildDescription(m),
+      entity_type: "deal",
+      entity_id: m.dealId,
+      priority: 3,
+      tags,
+    },
     m.requestId,
   );
 }
 
 /** Find a review created for this exact request (duplicate submission or uncertain create). */
-export async function findReviewByRequestId(dealId: string, requestId: string): Promise<LoadedReview | null> {
-  const res = await listDealTasks(dealId, { search: requestId.slice(0, 8), limit: 50 });
+export async function findReviewByRequestId(
+  dealId: string,
+  requestId: string,
+): Promise<LoadedReview | null> {
+  const res = await listDealTasks(dealId, {
+    search: requestId.slice(0, 8),
+    limit: 50,
+  });
   for (const task of res.items) {
     if (!isReviewTask(task)) continue;
     const parsed = parseDescription(task.description);
-    if (parsed.ok && parsed.manifest.requestId === requestId && parsed.manifest.dealId === dealId) {
+    if (
+      parsed.ok &&
+      parsed.manifest.requestId === requestId &&
+      parsed.manifest.dealId === dealId
+    ) {
       return { task, manifest: parsed.manifest, readOnlyReason: null };
     }
   }
@@ -104,7 +189,9 @@ export type ReviewSummary = {
   completedAt: string | null;
 };
 
-export async function listReviewSummaries(dealId: string): Promise<{ items: ReviewSummary[]; partial: boolean }> {
+export async function listReviewSummaries(
+  dealId: string,
+): Promise<{ items: ReviewSummary[]; partial: boolean }> {
   const res = await listDealTasks(dealId, { limit: 100 });
   const items: ReviewSummary[] = [];
   for (const task of res.items) {

@@ -2,7 +2,13 @@ import "server-only";
 import { AppRequestError } from "@/lib/auth/guard";
 import { env } from "@/lib/env";
 import type { Deal } from "@/lib/graph8/adapters/deals";
-import { getEmailThread, getMeeting, listEmailThreads, listMeetingsForParticipant, type EmailThread } from "@/lib/graph8/adapters/inbox";
+import {
+  getEmailThread,
+  getMeeting,
+  listEmailThreads,
+  listMeetingsForParticipant,
+  type EmailThread,
+} from "@/lib/graph8/adapters/inbox";
 import { getDealMemory } from "@/lib/graph8/adapters/memory";
 import { listDealNotes } from "@/lib/graph8/adapters/notes";
 import { Graph8Error } from "@/lib/graph8/errors";
@@ -15,7 +21,13 @@ import {
   sampleToDocuments,
   type SideContext,
 } from "./normalize";
-import { SAMPLE_LABEL, SAMPLE_SELLER_DOMAIN, SAMPLE_SOURCES, type SampleSource } from "./sample-data";
+import {
+  SAMPLE_LABEL,
+  SAMPLE_SELLER_DOMAIN,
+  SAMPLE_SOURCES,
+  SCOPE_SAMPLE_SOURCES,
+  type SampleSource,
+} from "./sample-data";
 import type { EvidenceDocument, Mode, SourceRef } from "./schemas";
 
 export type SourceCandidate = {
@@ -42,14 +54,24 @@ const EMAIL_PAGE_SIZE = 50;
 const MEETING_PAGE_SIZE = 25;
 const MAX_CONTACTS_SCANNED = 5;
 
+/** Reviews use the before-signing sample pool; the scope check uses the after-signing pool. Live sources are shared. */
+type SourcePurpose = "review" | "scope";
+const samplePool = (purpose: SourcePurpose) =>
+  purpose === "scope" ? SCOPE_SAMPLE_SOURCES : SAMPLE_SOURCES;
+
 function contactEmails(deal: Deal): string[] {
-  return [...new Set(deal.contacts.map((c) => c.email).filter((e): e is string => Boolean(e)))];
+  return [
+    ...new Set(
+      deal.contacts.map((c) => c.email).filter((e): e is string => Boolean(e)),
+    ),
+  ];
 }
 
 function sideContext(deal: Deal, mode: Mode): SideContext {
   const sellerDomains = [...env().sellerDomains];
   // The sample conversation's seller uses a reserved example domain; it is only honoured for sample evidence.
-  if (mode === "demo" && !sellerDomains.includes(SAMPLE_SELLER_DOMAIN)) sellerDomains.push(SAMPLE_SELLER_DOMAIN);
+  if (mode === "demo" && !sellerDomains.includes(SAMPLE_SELLER_DOMAIN))
+    sellerDomains.push(SAMPLE_SELLER_DOMAIN);
   return { sellerDomains, buyerEmails: contactEmails(deal) };
 }
 
@@ -59,31 +81,45 @@ function sampleMatches(source: SampleSource, deal: Deal): string[] {
 }
 
 function threadParticipants(t: EmailThread): string[] {
-  return [...new Set(t.messages.flatMap((m) => [m.from, ...m.to]).filter((e): e is string => Boolean(e)))];
+  return [
+    ...new Set(
+      t.messages
+        .flatMap((m) => [m.from, ...m.to])
+        .filter((e): e is string => Boolean(e)),
+    ),
+  ];
 }
 
-export async function findSourceCandidates(deal: Deal, mode: Mode): Promise<CandidateScan> {
+export async function findSourceCandidates(
+  deal: Deal,
+  mode: Mode,
+  purpose: SourcePurpose = "review",
+): Promise<CandidateScan> {
   const emails = contactEmails(deal);
   if (mode === "demo") {
-    const candidates = SAMPLE_SOURCES.map((s): SourceCandidate | null => {
-      const matched = sampleMatches(s, deal);
-      if (!matched.length) return null;
-      return {
-        ref: { kind: "sample", id: s.id },
-        kind: "sample",
-        originLabel: SAMPLE_LABEL,
-        title: s.title,
-        occurredAt: s.occurredAt,
-        participants: s.participants,
-        matchedContacts: matched,
-        textAvailable: true,
-        unavailableReason: null,
-        synthetic: true,
-      };
-    }).filter((c): c is SourceCandidate => c !== null);
+    const candidates = samplePool(purpose)
+      .map((s): SourceCandidate | null => {
+        const matched = sampleMatches(s, deal);
+        if (!matched.length) return null;
+        return {
+          ref: { kind: "sample", id: s.id },
+          kind: "sample",
+          originLabel: SAMPLE_LABEL,
+          title: s.title,
+          occurredAt: s.occurredAt,
+          participants: s.participants,
+          matchedContacts: matched,
+          textAvailable: true,
+          unavailableReason: null,
+          synthetic: true,
+        };
+      })
+      .filter((c): c is SourceCandidate => c !== null);
     return {
       candidates,
-      coverage: ["Demo mode offers only the labeled sample conversation. No Graph8 inbox or meeting records are used."],
+      coverage: [
+        "Demo mode offers only the labeled sample conversation. No Graph8 inbox or meeting records are used.",
+      ],
       errors: [],
     };
   }
@@ -96,8 +132,12 @@ export async function findSourceCandidates(deal: Deal, mode: Mode): Promise<Cand
   await scanDealRecords(deal, candidates, coverage, errors);
 
   if (!emails.length) {
-    coverage.push("This deal has no contact email addresses, so no emails or meetings can be matched.");
-    candidates.sort((a, b) => (b.occurredAt ?? "").localeCompare(a.occurredAt ?? ""));
+    coverage.push(
+      "This deal has no contact email addresses, so no emails or meetings can be matched.",
+    );
+    candidates.sort((a, b) =>
+      (b.occurredAt ?? "").localeCompare(a.occurredAt ?? ""),
+    );
     return { candidates, coverage, errors };
   }
 
@@ -121,7 +161,9 @@ export async function findSourceCandidates(deal: Deal, mode: Mode): Promise<Cand
           occurredAt: t.updatedAt,
           participants,
           matchedContacts: matched,
-          textAvailable: t.messages.some((m) => !m.isDraft && m.content.trim().length > 0),
+          textAvailable: t.messages.some(
+            (m) => !m.isDraft && m.content.trim().length > 0,
+          ),
           unavailableReason: null,
           synthetic: false,
         });
@@ -147,7 +189,13 @@ export async function findSourceCandidates(deal: Deal, mode: Mode): Promise<Cand
       for (const m of res.items) {
         if (seen.has(m.id)) continue;
         seen.add(m.id);
-        const participants = [...new Set([m.organizerEmail, ...m.attendees.map((a) => a.email)].filter((e): e is string => Boolean(e)))];
+        const participants = [
+          ...new Set(
+            [m.organizerEmail, ...m.attendees.map((a) => a.email)].filter(
+              (e): e is string => Boolean(e),
+            ),
+          ),
+        ];
         candidates.push({
           ref: { kind: "meeting", id: m.id },
           kind: "meeting",
@@ -157,26 +205,45 @@ export async function findSourceCandidates(deal: Deal, mode: Mode): Promise<Cand
           participants,
           matchedContacts: participants.filter((p) => emails.includes(p)),
           textAvailable: !m.transcriptRedacted,
-          unavailableReason: m.transcriptRedacted ? "Transcript hidden by Graph8 permissions." : null,
+          unavailableReason: m.transcriptRedacted
+            ? "Transcript hidden by Graph8 permissions."
+            : null,
           synthetic: false,
         });
       }
-      if (res.hasNext) coverage.push(`Meetings for ${email}: showing the first ${MEETING_PAGE_SIZE}; more exist.`);
+      if (res.hasNext)
+        coverage.push(
+          `Meetings for ${email}: showing the first ${MEETING_PAGE_SIZE}; more exist.`,
+        );
     } catch (err) {
       if (!(err instanceof Graph8Error)) throw err;
       errors.push(`Meetings for ${email} could not be read: ${err.message}`);
     }
   }
-  if (emails.length > MAX_CONTACTS_SCANNED) coverage.push(`Meetings: checked the first ${MAX_CONTACTS_SCANNED} deal contacts only.`);
-  coverage.push("Emails and meetings are listed only with an exact contact email match. Nothing is matched on names alone.");
+  if (emails.length > MAX_CONTACTS_SCANNED)
+    coverage.push(
+      `Meetings: checked the first ${MAX_CONTACTS_SCANNED} deal contacts only.`,
+    );
+  coverage.push(
+    "Emails and meetings are listed only with an exact contact email match. Nothing is matched on names alone.",
+  );
 
-  candidates.sort((a, b) => (b.occurredAt ?? "").localeCompare(a.occurredAt ?? ""));
+  candidates.sort((a, b) =>
+    (b.occurredAt ?? "").localeCompare(a.occurredAt ?? ""),
+  );
   return { candidates, coverage, errors };
 }
 
-async function scanDealRecords(deal: Deal, candidates: SourceCandidate[], coverage: string[], errors: string[]) {
+async function scanDealRecords(
+  deal: Deal,
+  candidates: SourceCandidate[],
+  coverage: string[],
+  errors: string[],
+) {
   try {
-    const notes = (await listDealNotes(deal.id)).filter((n) => noteToDocuments(n).length > 0);
+    const notes = (await listDealNotes(deal.id)).filter(
+      (n) => noteToDocuments(n).length > 0,
+    );
     for (const n of notes) {
       candidates.push({
         ref: { kind: "note", id: n.id },
@@ -191,7 +258,9 @@ async function scanDealRecords(deal: Deal, candidates: SourceCandidate[], covera
         synthetic: false,
       });
     }
-    coverage.push(`Deal notes: ${notes.length} note(s) on this deal (PromiseGuard's own notes are excluded).`);
+    coverage.push(
+      `Deal notes: ${notes.length} note(s) on this deal (PromiseGuard's own notes are excluded).`,
+    );
   } catch (err) {
     if (!(err instanceof Graph8Error)) throw err;
     errors.push(`Deal notes could not be read: ${err.message}`);
@@ -201,7 +270,12 @@ async function scanDealRecords(deal: Deal, candidates: SourceCandidate[], covera
     const memory = await getDealMemory(deal.id);
     const count = memory.reviews.reduce((n, r) => n + r.commitments.length, 0);
     if (count > 0) {
-      const latest = memory.reviews.map((r) => r.occurredAt).filter(Boolean).sort().at(-1) ?? null;
+      const latest =
+        memory.reviews
+          .map((r) => r.occurredAt)
+          .filter(Boolean)
+          .sort()
+          .at(-1) ?? null;
       candidates.push({
         ref: { kind: "memory", id: deal.id },
         kind: "memory",
@@ -227,61 +301,153 @@ async function scanDealRecords(deal: Deal, candidates: SourceCandidate[], covera
 }
 
 function noteTitle(content: string): string {
-  const first = (/<[a-z][\s\S]*>/i.test(content) ? htmlToText(content) : content).split("\n").find((l) => l.trim()) ?? "";
+  const first =
+    (/<[a-z][\s\S]*>/i.test(content) ? htmlToText(content) : content)
+      .split("\n")
+      .find((l) => l.trim()) ?? "";
   return `Deal note: ${first.trim().slice(0, 80)}${first.trim().length > 80 ? "…" : ""}`;
 }
 
-export type LoadedSource = { ref: SourceRef; label: string; documents: EvidenceDocument[] };
+export type LoadedSource = {
+  ref: SourceRef;
+  label: string;
+  documents: EvidenceDocument[];
+};
 
 /** Re-fetch and authorize one source on the server. Sample evidence is refused outside Demo mode. */
-export async function loadSource(deal: Deal, ref: SourceRef, mode: Mode): Promise<LoadedSource> {
+export async function loadSource(
+  deal: Deal,
+  ref: SourceRef,
+  mode: Mode,
+  purpose: SourcePurpose = "review",
+): Promise<LoadedSource> {
   const emails = contactEmails(deal);
   const ctx = sideContext(deal, mode);
 
   if (ref.kind === "sample") {
-    if (mode !== "demo") throw new AppRequestError("sample_in_live", "Sample evidence can never be used in a Live review.", 409);
-    const source = SAMPLE_SOURCES.find((s) => s.id === ref.id);
+    if (mode !== "demo")
+      throw new AppRequestError(
+        "sample_in_live",
+        "Sample evidence can never be used in a Live review.",
+        409,
+      );
+    const source = samplePool(purpose).find((s) => s.id === ref.id);
     if (!source || !sampleMatches(source, deal).length) {
-      throw new AppRequestError("source_unrelated", "This sample conversation does not involve the deal's contacts.", 409);
+      throw new AppRequestError(
+        "source_unrelated",
+        "This sample conversation does not involve the deal's contacts.",
+        409,
+      );
     }
-    return { ref, label: `${SAMPLE_LABEL}: ${source.title.replace(/^Sample conversation:\s*/, "")}`, documents: sampleToDocuments(source, ctx) };
+    return {
+      ref,
+      label: `${SAMPLE_LABEL}: ${source.title.replace(/^Sample conversation:\s*/, "")}`,
+      documents: sampleToDocuments(source, ctx),
+    };
   }
 
-  if (mode !== "live") throw new AppRequestError("live_in_demo", "Demo mode uses only the sample conversation.", 409);
+  if (mode !== "live")
+    throw new AppRequestError(
+      "live_in_demo",
+      "Demo mode uses only the sample conversation.",
+      409,
+    );
 
   if (ref.kind === "note") {
     // Listed through the deal, so a note from another deal can never be loaded by ID.
     const note = (await listDealNotes(deal.id)).find((n) => n.id === ref.id);
-    if (!note) throw new AppRequestError("source_unrelated", "This note is not attached to the deal.", 409);
+    if (!note)
+      throw new AppRequestError(
+        "source_unrelated",
+        "This note is not attached to the deal.",
+        409,
+      );
     const documents = noteToDocuments(note);
-    if (!documents.length) throw new AppRequestError("source_empty", "This note has no usable text.", 422);
-    return { ref, label: `Graph8 deal note${note.authorName ? ` by ${note.authorName}` : ""}`, documents };
+    if (!documents.length)
+      throw new AppRequestError(
+        "source_empty",
+        "This note has no usable text.",
+        422,
+      );
+    return {
+      ref,
+      label: `Graph8 deal note${note.authorName ? ` by ${note.authorName}` : ""}`,
+      documents,
+    };
   }
 
   if (ref.kind === "memory") {
-    if (ref.id !== deal.id) throw new AppRequestError("source_unrelated", "Deal memory belongs to a different deal.", 409);
+    if (ref.id !== deal.id)
+      throw new AppRequestError(
+        "source_unrelated",
+        "Deal memory belongs to a different deal.",
+        409,
+      );
     const documents = memoryToDocuments(deal.id, await getDealMemory(deal.id));
-    if (!documents.length) throw new AppRequestError("source_empty", "Graph8 has no extracted commitments for this deal.", 422);
-    return { ref, label: "Graph8 deal memory (AI summary of meeting reviews)", documents };
+    if (!documents.length)
+      throw new AppRequestError(
+        "source_empty",
+        "Graph8 has no extracted commitments for this deal.",
+        422,
+      );
+    return {
+      ref,
+      label: "Graph8 deal memory (AI summary of meeting reviews)",
+      documents,
+    };
   }
 
   if (ref.kind === "email") {
     const thread = await getEmailThread(ref.id);
     if (!threadParticipants(thread).some((p) => emails.includes(p))) {
-      throw new AppRequestError("source_unrelated", "This email thread does not include any of the deal's contacts.", 409);
+      throw new AppRequestError(
+        "source_unrelated",
+        "This email thread does not include any of the deal's contacts.",
+        409,
+      );
     }
     const documents = emailThreadToDocuments(thread, ctx);
-    if (!documents.length) throw new AppRequestError("source_empty", "This email thread has no readable message text.", 422);
-    return { ref, label: `Graph8 email: ${thread.subject || "(no subject)"}`, documents };
+    if (!documents.length)
+      throw new AppRequestError(
+        "source_empty",
+        "This email thread has no readable message text.",
+        422,
+      );
+    return {
+      ref,
+      label: `Graph8 email: ${thread.subject || "(no subject)"}`,
+      documents,
+    };
   }
 
   const meeting = await getMeeting(ref.id);
-  const participants = [meeting.organizerEmail, ...meeting.attendees.map((a) => a.email)];
+  const participants = [
+    meeting.organizerEmail,
+    ...meeting.attendees.map((a) => a.email),
+  ];
   if (!participants.some((p) => p && emails.includes(p))) {
-    throw new AppRequestError("source_unrelated", "This meeting does not include any of the deal's contacts.", 409);
+    throw new AppRequestError(
+      "source_unrelated",
+      "This meeting does not include any of the deal's contacts.",
+      409,
+    );
   }
-  if (meeting.transcriptRedacted) throw new AppRequestError("source_redacted", "This transcript is hidden by Graph8 permissions.", 403);
+  if (meeting.transcriptRedacted)
+    throw new AppRequestError(
+      "source_redacted",
+      "This transcript is hidden by Graph8 permissions.",
+      403,
+    );
   const documents = meetingToDocuments(meeting, ctx);
-  if (!documents.length) throw new AppRequestError("source_empty", "This meeting has no transcript text.", 422);
-  return { ref, label: `Graph8 meeting: ${meeting.subject || "(untitled)"}`, documents };
+  if (!documents.length)
+    throw new AppRequestError(
+      "source_empty",
+      "This meeting has no transcript text.",
+      422,
+    );
+  return {
+    ref,
+    label: `Graph8 meeting: ${meeting.subject || "(untitled)"}`,
+    documents,
+  };
 }
