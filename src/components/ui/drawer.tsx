@@ -18,13 +18,18 @@ export function Drawer({
 }) {
   const titleId = useId();
   const panel = useRef<HTMLDivElement>(null);
+  // Parents often pass a new onClose each render; reading it from a ref keeps focus from being reset on every keystroke.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     if (!open) return;
     const opener = document.activeElement as HTMLElement | null;
     panel.current?.focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") onCloseRef.current();
     };
     document.addEventListener("keydown", onKey);
     const overflow = document.body.style.overflow;
@@ -34,7 +39,7 @@ export function Drawer({
       document.body.style.overflow = overflow;
       opener?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
   return (

@@ -423,7 +423,93 @@ const dental: DemoScenario = {
   ],
 };
 
+const YOGA_DOMAIN = "promiseguard-demo-harboryoga.example";
+const NINA = person("Nina", "Patel", YOGA_DOMAIN);
+
+const yoga: DemoScenario = {
+  key: "yoga",
+  summary: "A clean quote that covers every promise: Clear to send, then handed to delivery as Graph8 tasks.",
+  company: { name: "[PromiseGuard Demo] Harbor Yoga Studio", domain: YOGA_DOMAIN },
+  contact: { first_name: "[PromiseGuard Demo] Nina", last_name: "Patel", work_email: NINA.speakerEmail, job_title: "Studio Owner" },
+  deal: { name: "[PromiseGuard Demo] Harbor Yoga email newsletter", amount: 2400, currency: "USD" },
+  quotes: [
+    {
+      key: "main",
+      linkToDeal: true,
+      title: "[PromiseGuard Demo] Harbor Yoga email newsletter quote",
+      currency: "USD",
+      payment_terms: "net_30",
+      contract_start_date: "2026-10-01",
+      contract_duration_value: 6,
+      contract_duration_unit: "months",
+      line_items: [
+        {
+          product_name: "Email newsletter service (6 months)",
+          description: "Two newsletters per month, written and sent for Harbor Yoga Studio.",
+          quantity: 1,
+          unit_amount: 180000,
+          billing_frequency: "one_time",
+        },
+        {
+          product_name: "Newsletter template design",
+          description: "A branded newsletter template in Harbor Yoga's colours with its logo.",
+          quantity: 1,
+          unit_amount: 60000,
+          billing_frequency: "one_time",
+        },
+      ],
+      terms_content: terms(
+        "What's included",
+        "Two newsletters per month for 6 months.",
+        "A branded newsletter template in your colours with your logo.",
+        "Importing your existing subscriber list from your booking system.",
+        "A monthly report showing opens and clicks.",
+        "",
+        "Timeline",
+        "The first newsletter goes out within 2 weeks after you send your logo and class schedule.",
+      ),
+      notes: NOT_SENT,
+    },
+  ],
+  sources: [
+    {
+      id: "yoga-planning-call",
+      kind: "sample",
+      format: "call_transcript",
+      title: "Sample conversation: Harbor Yoga planning call",
+      occurredAt: "2026-09-16T13:00:00.000Z",
+      participants: [SELLER.speakerEmail, NINA.speakerEmail],
+      messages: [
+        { ...NINA, text: "We want to stay in touch with our members between classes." },
+        { ...SELLER, text: "We'll send two newsletters a month for you." },
+        { ...SELLER, text: "We'll design a template in your colours with your logo." },
+        { ...NINA, text: "Can you move our subscriber list over from the booking system?" },
+        { ...SELLER, text: "Yes, we'll import your existing subscriber list." },
+      ],
+    },
+    {
+      id: "yoga-confirmation-email",
+      kind: "sample",
+      format: "email",
+      title: "Sample conversation: Harbor Yoga confirmation email",
+      occurredAt: "2026-09-18T10:00:00.000Z",
+      participants: [SELLER.speakerEmail, NINA.speakerEmail],
+      messages: [
+        {
+          ...SELLER,
+          text: "Hi Nina, to confirm: the first newsletter goes out within 2 weeks after you send your logo and class schedule, and each month you'll get a report showing opens and clicks.",
+        },
+      ],
+    },
+  ],
+  expected: [
+    "Every promise is Covered: two newsletters a month, the branded template, the subscriber import, the monthly report, and the first newsletter within 2 weeks (after the logo and class schedule arrive).",
+    "Quote Guard shows Clear to send.",
+    "Promise Handoff turns each covered promise into a Graph8 delivery task with an owner and a due date; these appear on the Delivery page.",
+  ],
+};
+
 /** The first scenario is the headline example linked from the Deals page. */
-export const DEMO_SCENARIOS: DemoScenario[] = [bakery, cafe, gym, dental];
+export const DEMO_SCENARIOS: DemoScenario[] = [bakery, cafe, gym, dental, yoga];
 
 export const SAMPLE_SOURCES: SampleSource[] = DEMO_SCENARIOS.flatMap((s) => s.sources);

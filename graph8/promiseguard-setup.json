@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-09-27T07:32:51.851Z",
+  "updatedAt": "2026-09-27T09:12:56.593Z",
   "ownerUserId": "8d63f41f-d5f8-446d-8c99-b70c0318b2dd",
   "skillId": "0d7b0d2d-eaff-45cd-a5e8-865496833630",
   "modelId": "gpt-4o",
@@ -38,6 +38,14 @@
       "companyId": 8,
       "contactId": 8,
       "dealId": "f14b46e8-7d35-4b04-b04f-0923ab9227da"
+    },
+    "yoga": {
+      "quotes": {
+        "main": "faf5cd81-1a64-4af2-a0e2-c71599662f9f"
+      },
+      "companyId": 11,
+      "contactId": 10,
+      "dealId": "70e6f086-087e-4d08-bc82-c9f8b650313a"
     }
   }
 }

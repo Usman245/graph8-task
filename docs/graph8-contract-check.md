@@ -1,6 +1,6 @@
 # Graph8 contract check
 
-Observed against the configured workspace on 2026-09-26 with `node scripts/check-graph8.mts`.
+Observed against the configured workspace on 2026-09-26 with read-only API calls.
 Contains response shapes only. No credentials or customer content.
 
 ## Workspace contents

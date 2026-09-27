@@ -35,6 +35,9 @@ export async function deliveryBoard(mode: Mode) {
   for (const task of res.items) {
     try { const m = validMarker(task); if (m.mode === mode) rows.push(row(task, m)); } catch { /* unrelated task */ }
   }
+  // Graph8 tasks carry assignee_id but often no assignee_name, so names come from the team list.
+  const names = new Map((await listDeliveryOwners().catch(() => [])).map((o) => [o.id, o.name]));
+  for (const r of rows) r.assigneeName ??= (r.assigneeId && names.get(r.assigneeId)) || null;
   const order: Record<DeliveryState, number> = { overdue: 0, needs_evidence: 1, open: 2, completed: 3 };
   rows.sort((a, b) => order[a.state] - order[b.state] || (a.dueDate ?? "").localeCompare(b.dueDate ?? ""));
   return { rows, partial: res.partial, mode };

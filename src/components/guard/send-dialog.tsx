@@ -60,7 +60,17 @@ export function SendDialog({ quoteId, open, onClose }: { quoteId: string; open: 
   const d = gate.data;
   const isDemo = d?.mode === "demo";
   const clear = d?.gate.state === "clear";
-  const canSend = Boolean(d) && d!.gate.state !== "closed" && (clear || (showOverride && override.trim().length >= 10)) && (isDemo || acknowledged);
+  const overrideOk = showOverride && override.trim().length >= 10;
+  const blocked: string[] = !d
+    ? []
+    : d.gate.state === "closed"
+      ? [d.gate.reasons[0] ?? "The quote is closed."]
+      : [
+          ...(!clear && !showOverride ? ["The gate is not clear: resolve the open items, or choose “Override the gate”."] : []),
+          ...(!clear && showOverride && !overrideOk ? [`Give an override reason of at least 10 characters (${override.trim().length}/10).`] : []),
+          ...(!isDemo && !acknowledged ? ["Tick the confirmation that Graph8 will email the quote."] : []),
+        ];
+  const canSend = Boolean(d) && blocked.length === 0;
 
   return (
     <Drawer
@@ -191,6 +201,13 @@ export function SendDialog({ quoteId, open, onClose }: { quoteId: string; open: 
               Cancel
             </Button>
           </div>
+          {blocked.length > 0 && (
+            <ul aria-label="Before you can send" className="space-y-1 text-xs font-medium text-missing">
+              {blocked.map((b) => (
+                <li key={b}>✗ {b}</li>
+              ))}
+            </ul>
+          )}
           {error && <ErrorPanel message={error} />}
         </div>
       )}

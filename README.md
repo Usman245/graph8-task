@@ -294,7 +294,7 @@ Generate secrets (PowerShell or bash): `node -e "console.log(require('crypto').r
 ```bash
 node scripts/setup-promiseguard.mts skill workflow   # comparison skill (prompt pg-v4) + workflow, validated before saving
 node scripts/setup-promiseguard.mts records          # demo companies, contacts, deals, draft quotes (with billing details)
-node scripts/setup-promiseguard.mts records:bakery   # one scenario only (bakery, cafe, gym, dental)
+node scripts/setup-promiseguard.mts records:bakery   # one scenario only (bakery, cafe, gym, dental, yoga)
 node scripts/setup-promiseguard.mts users            # team-member IDs for PROMISEGUARD_ASSIGNEES
 node scripts/setup-promiseguard.mts webhook          # Quote Guard autopilot (needs PUBLIC_URL + WEBHOOK_TOKEN)
 ```
@@ -313,18 +313,10 @@ npm run lint
 
 Sign in with `PROMISEGUARD_APP_PASSWORD`, then open **Connection** to confirm every Graph8 check shows "Available".
 
-### Diagnostic scripts
-
-```bash
-node scripts/check-graph8.mts          # read-only: prints response shapes, never record contents
-node scripts/smoke-compare.mts         # one tiny AI comparison through the workflow (uses credits)
-node scripts/check-task-storage.mts    # verifies task storage; creates "[PromiseGuard Demo] Storage check" tasks
-```
-
 ### Demo scenarios
 
 The seller in every scenario is **Brightside Marketing**, a small digital marketing agency (account manager Maya Brooks),
-selling to four local businesses. The language is deliberately everyday, so non-technical viewers can follow each gap.
+selling to five local businesses. The language is deliberately everyday, so non-technical viewers can follow each gap.
 Created in Graph8 by the setup script. Expected results are in `sample-data.ts` (`expected`).
 
 | Deal | What it demonstrates |
@@ -333,6 +325,7 @@ Created in Graph8 by the setup script. Expected results are in `sample-data.ts` 
 | **Green Leaf Café Google search** | Two quote versions (choosing the right one matters); "first page of Google in 2 months" **conflicts** with "no ranking guarantee"; "first month free if you sign by October 15" keeps its condition; a later email withdraws "we'll reply to your reviews" |
 | **Summit Fitness online ads** | "50 new members a month guaranteed" and "same fee for 2 years" **conflict** with the quote; weekly updates are **missing**; a freelance videographer's promise should be **needs review**; a one-month trial quote not linked to the deal needs confirming |
 | **Rivera Family Dental new website** | Pages, changes, and booking button **covered**; "free hosting for the first year" **conflicts**. The best quote for the fix-and-send story: fix hosting, recheck, clear, send |
+| **Harbor Yoga email newsletter** | A clean quote: every promise **covered**, Quote Guard **Clear to send**. Its covered promises were handed to delivery, so the **Delivery** page shows owners, due dates, one overdue task, and one completed with evidence |
 
 ---
 
