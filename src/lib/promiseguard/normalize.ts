@@ -11,11 +11,10 @@ import type { EvidenceDocument, QuoteDocument, QuotePart, SourceRef, SpeakerSide
 
 export type SideContext = {
   sellerDomains: string[];
-  /** Emails of the deal's customer-side contacts. */
   buyerEmails: string[];
 };
 
-export function normalizeText(text: string): string {
+function normalizeText(text: string): string {
   return text
     .replace(/\r\n?/g, "\n")
     .replace(/ /g, " ")
@@ -43,21 +42,21 @@ export function htmlToText(html: string): string {
 }
 
 /** Drop quoted reply history ("On ... wrote:" and "> " lines) so earlier messages are not double-counted. */
-export function stripQuotedHistory(text: string): string {
+function stripQuotedHistory(text: string): string {
   const lines = text.split("\n");
   const cut = lines.findIndex((l) => /^On .{4,200} wrote:\s*$/.test(l.trim()) || /^-{2,}\s*Original Message\s*-{2,}$/i.test(l.trim()));
   const kept = (cut >= 0 ? lines.slice(0, cut) : lines).filter((l) => !l.trimStart().startsWith(">"));
   return normalizeText(kept.join("\n"));
 }
 
-export function domainOf(email: string | null | undefined): string | null {
+function domainOf(email: string | null | undefined): string | null {
   if (!email) return null;
   const at = email.lastIndexOf("@");
   return at > 0 ? email.slice(at + 1).trim().toLowerCase() : null;
 }
 
 /** Seller only when the address matches a configured seller domain; buyer only for known deal contacts. */
-export function sideForEmail(email: string | null | undefined, ctx: SideContext): SpeakerSide {
+function sideForEmail(email: string | null | undefined, ctx: SideContext): SpeakerSide {
   const lower = email?.trim().toLowerCase() ?? null;
   const domain = domainOf(lower);
   if (domain && ctx.sellerDomains.includes(domain)) return "seller";
@@ -109,10 +108,7 @@ export function emailThreadToDocuments(thread: EmailThread, ctx: SideContext): E
 
 const UTTERANCE = /^(?:\[?\(?\d{1,2}:\d{2}(?::\d{2})?\)?\]?\s*[-–]?\s*)?([^:\n]{1,60}):\s+(.+)$/;
 
-/**
- * One document per speaker turn. Speaker side comes only from matching the label to an
- * attendee name with a known email; anything else stays "unknown" (never fabricated).
- */
+/** One document per speaker turn; speaker side comes only from attendee emails and is never guessed. */
 export function meetingToDocuments(meeting: Meeting, ctx: SideContext): EvidenceDocument[] {
   const parent: SourceRef = { kind: "meeting", id: meeting.id };
   const text = normalizeText(meeting.transcriptText ?? "");
@@ -139,12 +135,9 @@ export function meetingToDocuments(meeting: Meeting, ctx: SideContext): Evidence
 
 /** Notes PromiseGuard itself writes (clarifications, override logs) are never evidence. */
 export const PROMISEGUARD_NOTE_PREFIX = "[PromiseGuard]";
-export const isPromiseGuardNote = (content: string) => content.trimStart().startsWith(PROMISEGUARD_NOTE_PREFIX);
+const isPromiseGuardNote = (content: string) => content.trimStart().startsWith(PROMISEGUARD_NOTE_PREFIX);
 
-/**
- * A deal note is written inside Graph8 by the seller's team, so its author is on the seller side.
- * The prompt tells the model a note may also report what the buyer said.
- */
+/** Deal notes are written by the seller's team, so their author is on the seller side. */
 export function noteToDocuments(note: DealNote): EvidenceDocument[] {
   const parent: SourceRef = { kind: "note", id: note.id };
   const text = /<[a-z][\s\S]*>/i.test(note.content) ? htmlToText(note.content) : normalizeText(note.content);
@@ -180,10 +173,7 @@ function money(minor: number | null, currency: string | null): string | null {
   return `${(minor / 100).toFixed(2)} ${currency ?? ""}`.trim();
 }
 
-/**
- * Quote parts use only fields Graph8 returned. Internal `notes` are excluded (not customer-facing scope).
- * textComplete is conservative: attachments or truncation make it false.
- */
+/** Quote parts use only returned, customer-facing fields; attachments or truncation mark the text incomplete. */
 export function quoteToDocument(q: QuoteRecord, maxChars: number): QuoteDocument {
   const parts: QuotePart[] = [];
   const included: string[] = [];

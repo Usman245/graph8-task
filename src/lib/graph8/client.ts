@@ -6,22 +6,17 @@ import { Graph8Error, codeForStatus } from "./errors";
 type Query = Record<string, string | number | boolean | undefined | null>;
 
 type RequestOptions = {
-  /** Human-readable operation name used in errors, e.g. "read deal". */
   operation: string;
   query?: Query;
   body?: unknown;
   timeoutMs?: number;
-  /** Only for verified endpoint-specific headers such as `idempotency-key` on POST /tasks. */
   idempotencyKey?: string;
 };
 
 const DEFAULT_TIMEOUT_MS = 20_000;
 const MAX_GET_ATTEMPTS = 3;
 
-/**
- * Build a path from fixed segments and record IDs. IDs are URL-encoded so a
- * record ID can never change the path or origin.
- */
+/** Builds a path with URL-encoded IDs, so a record ID can never change the path or origin. */
 export function path(strings: TemplateStringsArray, ...ids: Array<string | number>): string {
   return strings.reduce(
     (acc, part, i) => acc + part + (i < ids.length ? encodeURIComponent(String(ids[i])) : ""),
@@ -35,7 +30,6 @@ export const graph8 = {
   patch: (p: string, opts: RequestOptions) => request("PATCH", p, opts),
 };
 
-/** Validate a Graph8 response against an adapter schema; mismatches become a safe bad_response error. */
 export function parseResponse<S extends z.ZodType>(schema: S, json: unknown, operation: string): z.infer<S> {
   const parsed = schema.safeParse(json);
   if (!parsed.success) {
@@ -43,10 +37,6 @@ export function parseResponse<S extends z.ZodType>(schema: S, json: unknown, ope
     throw new Graph8Error({ code: "bad_response", operation });
   }
   return parsed.data;
-}
-
-export function isGraph8Configured(): boolean {
-  return Boolean(env().GRAPH8_API_KEY);
 }
 
 async function request(method: "GET" | "POST" | "PATCH", p: string, opts: RequestOptions): Promise<unknown> {
@@ -122,7 +112,6 @@ async function once(method: string, url: URL, apiKey: string, opts: RequestOptio
       status: res.status,
       // Graph8's own validation text (e.g. "Billing email is required.") tells the user what to fix in Graph8.
       message: code === "validation" ? validationMessage(json, opts.operation) : undefined,
-      // Validation details are useful in setup diagnostics; never includes our credentials.
       details: { retryAfterMs: Number.isFinite(retryAfterMs) ? retryAfterMs : undefined, body: res.status === 422 ? json : undefined },
     });
   }

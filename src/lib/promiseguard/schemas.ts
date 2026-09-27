@@ -38,9 +38,21 @@ export type QuoteDocument = {
   limitations: string[];
 };
 
-export const CATEGORIES = ["scope", "timeline", "support", "price", "other"] as const;
+const CATEGORIES = ["scope", "timeline", "support", "price", "other"] as const;
 export const COVERAGES = ["covered", "missing", "conflict", "needs_review"] as const;
 export type Coverage = (typeof COVERAGES)[number];
+export const RISK_LEVELS = ["low", "medium", "high", "unknown"] as const;
+const RISK_TYPES = ["guarantee", "undefined_metric", "unbounded_scope", "dependency", "timeline", "pricing", "other"] as const;
+export type RiskLevel = (typeof RISK_LEVELS)[number];
+
+const ModelCommercialRiskSchema = z.object({
+  level: z.enum(RISK_LEVELS),
+  risk_types: z.array(z.enum(RISK_TYPES)).max(5),
+  reason: z.string().max(800),
+  missing_information: z.array(z.string().max(300)).max(6),
+  recommended_clause: z.string().max(800),
+  requires_approval: z.boolean(),
+});
 
 /** Exact model output contract (mirrors MODEL_OUTPUT_SCHEMA in prompt.ts). */
 export const ModelOutputSchema = z.object({
@@ -55,10 +67,11 @@ export const ModelOutputSchema = z.object({
       sales_evidence: z.array(z.object({ document_id: z.string(), excerpt: z.string().min(1).max(1500) })).min(1).max(6),
       quote_evidence: z.array(z.object({ part_id: z.string(), excerpt: z.string().min(1).max(1500) })).max(6),
       suggested_action: z.string().max(600),
+      // Optional while an execution started under pg-v3 is still finishing during deployment.
+      commercial_risk: ModelCommercialRiskSchema.optional(),
     }),
   ),
 });
-export type ModelOutput = z.infer<typeof ModelOutputSchema>;
 
 export const CitationSchema = z.object({
   documentId: z.string(),
@@ -81,22 +94,31 @@ export const FindingSchema = z.object({
   salesEvidence: z.array(CitationSchema),
   quoteEvidence: z.array(CitationSchema),
   suggestedAction: z.string(),
+  /** Graph8 AI assessment grounded only in the selected evidence and quotation. Absent on pg-v3 reviews. */
+  commercialRisk: z
+    .object({
+      level: z.enum(RISK_LEVELS),
+      riskTypes: z.array(z.enum(RISK_TYPES)),
+      reason: z.string(),
+      missingInformation: z.array(z.string()),
+      recommendedClause: z.string(),
+      requiresApproval: z.boolean(),
+    })
+    .optional(),
 });
 export type Finding = z.infer<typeof FindingSchema>;
 
-export const HumanDecisionSchema = z.object({
+const HumanDecisionSchema = z.object({
   findingId: z.string(),
   decision: z.enum(["confirmed", "dismissed", "resolved"]),
   reason: z.string(),
   actorLabel: z.string(),
   at: z.string(),
 });
-export type HumanDecision = z.infer<typeof HumanDecisionSchema>;
 
-export const RUN_STATES = ["preparing", "running", "completed", "failed", "start_unknown", "stale"] as const;
-export type RunState = (typeof RUN_STATES)[number];
+const RUN_STATES = ["preparing", "running", "completed", "failed", "start_unknown", "stale"] as const;
 
-export const DocumentInfoSchema = z.object({
+const DocumentInfoSchema = z.object({
   source: z.string(),
   speaker: z.string().nullable(),
   side: z.enum(["seller", "buyer", "unknown"]),
@@ -118,6 +140,9 @@ export const ReviewManifestSchema = z.object({
   sourceRefs: z.array(SourceRefSchema),
   sourceLabels: z.record(z.string(), z.string()),
   sourceHashes: z.record(z.string(), z.string()),
+  // Optional for older manifests: these stay readable but need a fresh review before sending.
+  discoveredSourceKeys: z.array(z.string()).optional(),
+  discoveryComplete: z.boolean().optional(),
   quoteHash: z.string(),
   quoteTextComplete: z.boolean(),
   quoteIncludedFields: z.array(z.string()),
@@ -136,6 +161,9 @@ export const ReviewManifestSchema = z.object({
   coverageComplete: z.boolean(),
   coverageNotes: z.array(z.string()),
   previousReviewTaskId: z.string().nullable(),
+  /** What started the review; absent on older manifests. */
+  trigger: z.enum(["user", "manual", "webhook", "scan"]).optional(),
+  triggerEvent: z.string().max(60).optional(),
   createdAt: z.string(),
   completedAt: z.string().nullable(),
 });

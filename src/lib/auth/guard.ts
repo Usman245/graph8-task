@@ -6,7 +6,6 @@ import { fail } from "@/lib/api/result";
 import { Graph8Error } from "@/lib/graph8/errors";
 import { SESSION_COOKIE, verifySessionToken, type Session } from "./session";
 
-/** For server components/pages: redirect to /login when there is no valid session. */
 export async function requirePageSession(): Promise<Session> {
   const store = await cookies();
   const session = await verifySessionToken(store.get(SESSION_COOKIE)?.value);
@@ -16,10 +15,7 @@ export async function requirePageSession(): Promise<Session> {
 
 type Handler<C> = (req: Request, ctx: C, session: Session) => Promise<Response>;
 
-/**
- * Wraps an internal API route: verifies the session, checks Origin on
- * mutations, and converts thrown errors into the app envelope.
- */
+/** Wraps an API route: session check, Origin check on mutations, and errors converted to the app envelope. */
 export function withSession<C>(handler: Handler<C>) {
   return async (req: Request, ctx: C): Promise<Response> => {
     const store = await cookies();
@@ -49,7 +45,7 @@ export function sameOrigin(req: Request): boolean {
   }
 }
 
-export function errorResponse(err: unknown): Response {
+function errorResponse(err: unknown): Response {
   if (err instanceof Graph8Error) {
     const status =
       err.code === "not_configured" ? 503 :
@@ -89,7 +85,6 @@ export async function parseBody<S extends z.ZodType>(req: Request, schema: S, ma
   return parsed.data;
 }
 
-/** Parse a JSON body with a hard size cap. */
 export async function readJson(req: Request, maxBytes = 16_000): Promise<unknown> {
   const text = await req.text();
   if (text.length > maxBytes) throw new AppRequestError("payload_too_large", "Request body is too large.", 413);

@@ -3,6 +3,9 @@ import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth/session";
 
 // Optimistic check only. Every page and API route verifies the session again.
 export async function proxy(request: NextRequest) {
+  // The landing page is public.
+  if (request.nextUrl.pathname === "/") return NextResponse.next();
+
   const session = await verifySessionToken(request.cookies.get(SESSION_COOKIE)?.value);
   if (session) return NextResponse.next();
 
@@ -18,5 +21,5 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   // api/webhooks is called by Graph8 (no session); it authenticates with its own URL token.
-  matcher: ["/((?!login|api/auth|api/health|api/webhooks|_next/static|_next/image|favicon.ico).*)"],
+  matcher: ["/((?!login|api/auth|api/health|api/webhooks|_next/static|_next/image|favicon.ico|icon.svg).*)"],
 };

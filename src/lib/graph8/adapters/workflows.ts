@@ -2,17 +2,14 @@ import "server-only";
 import { z } from "zod";
 import { graph8, parseResponse, path } from "../client";
 
-// Verified 2026-09-26:
-// POST /workflows/{action_id}/execute -> { success, execution_id, status: "pending", message }
-// GET /workflows/executions/{id} -> { status, error_message, output_data.node_results.<node>.output }
-//   compare_1.output.result is the raw model string; parse_1.output.result is Graph8's parsed object.
-// GET /workflows/executions?action_id= -> { executions: [...incl. input_data], total_count }
+// Verified: execute -> { execution_id }. An execution's node_results.compare_1.output.result is the raw model text and
+// parse_1.output.result is Graph8's parsed object. executions?action_id= lists runs with their input_data.
 
-export const COMPARE_NODE = "compare_1";
-export const PARSE_NODE = "parse_1";
+const COMPARE_NODE = "compare_1";
+const PARSE_NODE = "parse_1";
 
-export type ExecutionStatus = "pending" | "running" | "completed" | "failed" | "paused" | "pending_approval" | "stopped";
-export const TERMINAL_STATUSES: ExecutionStatus[] = ["completed", "failed", "stopped"];
+type ExecutionStatus = "pending" | "running" | "completed" | "failed" | "paused" | "pending_approval" | "stopped";
+const TERMINAL_STATUSES: ExecutionStatus[] = ["completed", "failed", "stopped"];
 
 const NodeResult = z.object({
   status: z.string().nullish(),
@@ -40,12 +37,11 @@ const ExecutionDto = z.object({
   created_at: z.string().nullish(),
 });
 
-export type Execution = {
+type Execution = {
   executionId: string;
   status: ExecutionStatus | string;
   terminal: boolean;
   errorMessage: string | null;
-  /** Raw model text from the comparison node, if it completed. */
   rawResult: string | null;
   /** Graph8's parse_json output, used only as a fallback when the raw text is not strict JSON. */
   parsedResult: unknown;

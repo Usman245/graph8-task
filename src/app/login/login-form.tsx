@@ -5,6 +5,9 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ApiError, api } from "@/lib/api/client-fetch";
 
+/** Shown on the login page so demo reviewers can sign in. Must match PROMISEGUARD_APP_PASSWORD. */
+const DEMO_PASSWORD = "test123";
+
 export function LoginForm() {
   const router = useRouter();
   const [password, setPassword] = useState("");
@@ -26,9 +29,9 @@ export function LoginForm() {
   }
 
   return (
-    <form onSubmit={onSubmit} className="mt-8 space-y-4 rounded-lg border border-border bg-surface p-5">
+    <form onSubmit={onSubmit} className="pg-card mt-8 space-y-4 p-6">
       <div className="space-y-1.5">
-        <label htmlFor="password" className="block text-sm font-medium">
+        <label htmlFor="password" className="pg-label">
           Workspace password
         </label>
         <input
@@ -38,17 +41,33 @@ export function LoginForm() {
           required
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm"
+          className="pg-field mt-1.5 py-2.5"
         />
       </div>
       {error && (
-        <p role="alert" className="text-sm text-conflict">
+        <p role="alert" className="rounded-lg bg-conflict-soft px-3 py-2 text-sm text-conflict">
           {error}
         </p>
       )}
-      <Button type="submit" disabled={pending || !password} className="w-full">
+      <Button type="submit" disabled={pending || !password} className="w-full py-2.5">
         {pending ? "Signing in…" : "Sign in"}
       </Button>
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-dashed border-missing/40 bg-missing-soft px-3.5 py-3 text-sm text-missing">
+        <p>
+          <span className="font-semibold">Demo access:</span> password is{" "}
+          <code className="rounded bg-surface px-1.5 py-0.5 font-mono text-foreground">{DEMO_PASSWORD}</code>
+        </p>
+        <button
+          type="button"
+          onClick={() => {
+            setPassword(DEMO_PASSWORD);
+            setError(null);
+          }}
+          className="font-semibold underline underline-offset-4 hover:text-foreground"
+        >
+          Use it
+        </button>
+      </div>
     </form>
   );
 }

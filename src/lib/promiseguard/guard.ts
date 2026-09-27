@@ -17,32 +17,35 @@ import { listWebhooks } from "@/lib/graph8/adapters/webhooks";
 import { Graph8Error } from "@/lib/graph8/errors";
 import { GATE_LABEL, openFindings, type GateState } from "./gate-rules";
 import { sha256 } from "./hash";
+import { discoveryComplete, discoveryKeys, evidenceFingerprint, evidenceReader, readSourceHashes } from "./freshness";
 import { withLock } from "./lock";
 import { DEMO_TITLE_PREFIX, REVIEW_TAG, REVIEW_TITLE_PREFIX } from "./manifest";
 import { isDemoDeal } from "./mode";
 import { PROMISEGUARD_NOTE_PREFIX, quoteToDocument } from "./normalize";
+import { PROMPT_VERSION } from "./prompt";
 import { listReviewSummaries, loadReview, type ReviewSummary } from "./repository";
 import { finalizeReview, startReview } from "./runs";
-import { refKey, type Coverage, type Mode, type SummaryCounts } from "./schemas";
-import { findSourceCandidates } from "./sources";
+import { type Coverage, type Mode, type RiskLevel, type SummaryCounts } from "./schemas";
 
-// Quote Guard: reviews quotes automatically when they are created or edited (Graph8 webhook or a manual
-// scan), gates the send on the latest review, and alerts on quotes sent with open promise gaps.
-// Single-instance state (timers, activity log) lives on globalThis so it survives dev hot reloads.
+// Quote Guard: automatic quote reviews (Graph8 webhook or scan), the send gate, and alerts for quotes sent with open risks.
+// Background work runs in next/server after() with a deadline, so it also works on serverless hosts.
 
 type Store = {
-  timers: Map<string, ReturnType<typeof setTimeout>>;
   watching: Set<string>;
   activity: AutopilotEvent[];
 };
-const store: Store = ((globalThis as { __promiseguardGuard?: Store }).__promiseguardGuard ??= {
-  timers: new Map(),
+const store: Store = ((globalThis as { __promiseguardGuard2?: Store }).__promiseguardGuard2 ??= {
   watching: new Set(),
   activity: [],
 });
 
+/** Background work must finish inside the route's maxDuration (60s); unfinished reviews finalize on the next view. */
+const BACKGROUND_BUDGET_MS = 50_000;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 export type AutopilotEvent = {
   at: string;
+  source?: "graph8" | "server";
   quoteId: string;
   quoteLabel: string | null;
   trigger: "webhook" | "scan" | "manual" | "send";
@@ -60,7 +63,7 @@ function record(e: Omit<AutopilotEvent, "at">) {
 const ACTIVE_RUN = new Set(["preparing", "running", "start_unknown"]);
 
 /** UUID-shaped (version 8) ID derived from a seed, so the same quote version and sources map to one review. */
-export function deterministicId(seed: string): string {
+function deterministicId(seed: string): string {
   const h = sha256(seed);
   const variant = ((parseInt(h[16], 16) & 0x3) | 0x8).toString(16);
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-8${h.slice(13, 16)}-${variant}${h.slice(17, 20)}-${h.slice(20, 32)}`;
@@ -68,9 +71,6 @@ export function deterministicId(seed: string): string {
 
 export const modeForDeal = (deal: Pick<Deal, "name">): Mode => (isDemoDeal(deal) ? "demo" : "live");
 const isTerminal = (q: QuoteRecord) => TERMINAL_QUOTE_STATUSES.includes((q.status ?? "").toLowerCase());
-
-// ---------------------------------------------------------------------------------------------
-// Gate
 
 export type QuoteGate = {
   state: GateState;
@@ -82,8 +82,7 @@ export type QuoteGate = {
   reviewedAt: string | null;
 };
 
-/** Evaluate one quote against the reviews already loaded for its deal (newest first). */
-export function evaluateGate(quote: QuoteRecord, currentHash: string, reviews: ReviewSummary[]): QuoteGate {
+function evaluateGate(quote: QuoteRecord, currentHash: string, reviews: ReviewSummary[]): QuoteGate {
   const make = (state: GateState, reasons: string[], r: ReviewSummary | null = null): QuoteGate => ({
     state,
     label: GATE_LABEL[state],
@@ -107,13 +106,41 @@ export function evaluateGate(quote: QuoteRecord, currentHash: string, reviews: R
     return make("changed", ["The quote text changed after the latest review. Review it again."], latest);
   }
   if ((current.open ?? 0) > 0) {
-    return make("at_risk", [`${current.open} promise gap(s) are still open: conflicts, missing items, or items needing review.`], current);
+    return make("at_risk", [`${current.open} promise risk(s) are still open: coverage gaps, items needing review, or high-risk commitments requiring approval.`], current);
   }
-  const notes = current.coverageComplete === false ? ["Coverage was incomplete (see the review's limitations)."] : [];
-  return make("clear", notes, current);
+  if (current.coverageComplete !== true || current.open == null) {
+    return make("incomplete", ["Coverage is incomplete or unknown. Recheck the evidence, or explicitly override with a logged reason."], current);
+  }
+  return make("clear", [], current);
 }
 
-export type OpenItem = { findingId: string; commitment: string; coverage: Coverage };
+/** No green result survives an unreadable, changed, newly added, or removed source. */
+async function freshGate(quote: QuoteRecord, hash: string, reviews: ReviewSummary[], deal: Deal | null, reader?: ReturnType<typeof evidenceReader>): Promise<QuoteGate> {
+  const gate = evaluateGate(quote, hash, reviews);
+  if (!deal || !gate.reviewTaskId || !["clear", "at_risk", "incomplete"].includes(gate.state)) return gate;
+  const review = reviews.find((r) => r.taskId === gate.reviewTaskId)!;
+  const block = (state: GateState, reason: string): QuoteGate => ({ ...gate, state, label: GATE_LABEL[state], reasons: [reason, ...gate.reasons] });
+  if (review.mode !== modeForDeal(deal)) return block("failed", "The saved review does not match this deal's mode.");
+  if (!review.discoveredSourceKeys || review.promptVersion !== PROMPT_VERSION) {
+    return block("changed", "This review needs a recheck to establish the current evidence baseline.");
+  }
+  try {
+    const current = reader ?? evidenceReader(deal, modeForDeal(deal));
+    const scan = await current.scan();
+    if (!discoveryComplete(scan)) return block("incomplete", "Some sources could not be discovered or read. Restore access and recheck, or explicitly override.");
+    if (!review.sourceRefs.length) return block("incomplete", "The review has no selected evidence sources.");
+    const hashes = await readSourceHashes(current, review.sourceRefs);
+    if (evidenceFingerprint(hash, hashes, discoveryKeys(scan), modeForDeal(deal)) !== evidenceFingerprint(review.quoteHash!, review.sourceHashes, review.discoveredSourceKeys, review.mode!)) {
+      return block("changed", "The selected evidence or available source set changed after this review. Review it again.");
+    }
+    if (!review.discoveryComplete) return block("incomplete", "Source discovery was incomplete when this review ran. Recheck before sending.");
+    return gate;
+  } catch {
+    return block("incomplete", "Current evidence could not be verified. Restore access and recheck, or explicitly override with a logged reason.");
+  }
+}
+
+export type OpenItem = { findingId: string; commitment: string; coverage: Coverage; riskLevel: RiskLevel | null };
 
 export type QuoteGateDetail = {
   quoteId: string;
@@ -132,11 +159,13 @@ export async function quoteGateDetail(quoteId: string): Promise<QuoteGateDetail>
   const doc = quoteToDocument(quote, env().PROMISEGUARD_MAX_QUOTE_CHARS);
   const deal = quote.dealId ? await getDeal(quote.dealId) : null;
   const reviews = deal ? (await listReviewSummaries(deal.id)).items : [];
-  const gate = evaluateGate(quote, doc.versionHash, reviews);
+  const gate = await freshGate(quote, doc.versionHash, reviews, deal);
   let openItems: OpenItem[] = [];
   if (gate.state === "at_risk" && gate.reviewTaskId) {
     const r = await loadReview(gate.reviewTaskId);
-    openItems = r.manifest ? openFindings(r.manifest).map((f) => ({ findingId: f.id, commitment: f.commitment, coverage: f.coverage })) : [];
+    openItems = r.manifest
+      ? openFindings(r.manifest).map((f) => ({ findingId: f.id, commitment: f.commitment, coverage: f.coverage, riskLevel: f.commercialRisk?.level ?? null }))
+      : [];
   }
   if (gate.state === "reviewing" && gate.reviewTaskId) watchReview(gate.reviewTaskId);
   return {
@@ -152,9 +181,6 @@ export async function quoteGateDetail(quoteId: string): Promise<QuoteGateDetail>
   };
 }
 
-// ---------------------------------------------------------------------------------------------
-// Automatic review
-
 export type AutoResult = {
   quoteId: string;
   quoteLabel: string | null;
@@ -163,12 +189,12 @@ export type AutoResult = {
   reason: string | null;
 };
 
-/**
- * Review a quote against every readable conversation of its deal. The request ID is derived from the quote
- * version and source set, so repeated events for an unchanged quote reuse the same review instead of
- * spending AI credits again. A manual trigger retries a failed review with a fresh request ID.
- */
-export async function autoReviewQuote(quoteId: string, trigger: AutopilotEvent["trigger"]): Promise<AutoResult> {
+/** Request IDs come from the quote version and sources, so an unchanged quote reuses its review instead of spending AI credits. */
+async function autoReviewQuote(
+  quoteId: string,
+  trigger: AutopilotEvent["trigger"],
+  opts: { event?: string; deadline?: number } = {},
+): Promise<AutoResult> {
   return withLock(`quote:${quoteId}`, async () => {
     const e = env();
     const skip = (reason: string, label: string | null = null): AutoResult => ({ quoteId, quoteLabel: label, outcome: "skipped", reviewTaskId: null, reason });
@@ -184,7 +210,9 @@ export async function autoReviewQuote(quoteId: string, trigger: AutopilotEvent["
     const mode = modeForDeal(deal);
     if (mode === "demo" && !e.PROMISEGUARD_DEMO_ENABLED) return skip("Demo mode is disabled on this server.", doc.label);
 
-    const scan = await findSourceCandidates(deal, mode);
+    const reader = evidenceReader(deal, mode);
+    const scan = await reader.scan();
+    if (!discoveryComplete(scan)) return skip("Source discovery is incomplete. Restore access to the evidence and try again.", doc.label);
     const refs = scan.candidates.filter((c) => c.textAvailable).slice(0, e.PROMISEGUARD_MAX_SOURCES).map((c) => c.ref);
     if (!refs.length) {
       return skip(
@@ -195,53 +223,47 @@ export async function autoReviewQuote(quoteId: string, trigger: AutopilotEvent["
 
     const forQuote = (await listReviewSummaries(deal.id)).items.filter((r) => r.quoteId === quote.id);
     const latest = forQuote[0] ?? null;
-    const keys = refs.map(refKey).sort().join("|");
-    // Same quote version and same sources: reuse a completed or running review instead of spending credits.
-    const reusable = forQuote.find(
-      (r) => r.quoteHash === doc.versionHash && r.sourceKeys.join("|") === keys && (r.runState === "completed" || ACTIVE_RUN.has(r.runState ?? "")),
-    );
-    if (reusable) {
-      if (ACTIVE_RUN.has(reusable.runState ?? "")) watchReview(reusable.taskId);
-      return { quoteId, quoteLabel: doc.label, outcome: "up_to_date", reviewTaskId: reusable.taskId, reason: "This quote version was already reviewed with the same sources." };
-    }
-    // A failed review of the same input is retried only on a manual request, never by the webhook or a scan.
-    const failedSame = forQuote.find((r) => r.quoteHash === doc.versionHash && r.sourceKeys.join("|") === keys);
-    if (failedSame && trigger !== "manual") {
-      return { quoteId, quoteLabel: doc.label, outcome: "skipped", reviewTaskId: failedSame.taskId, reason: "The last review of this quote version failed. Use Review now to retry." };
-    }
-    const retryFailed = Boolean(failedSame);
-
-    // Drop the oldest sources if the selection is too long for one review.
+    // Apply the text budget before computing identity, so a bounded review can be reused too.
     let attempt = refs;
-    for (;;) {
-      const seed = `auto|${quote.id}|${doc.versionHash}|${attempt.map(refKey).sort().join("|")}`;
-      try {
-        const res = await startReview({
-          dealId: deal.id,
-          quoteId: quote.id,
-          sourceRefs: attempt,
-          matchConfirmed: false,
-          requestId: retryFailed ? crypto.randomUUID() : deterministicId(seed),
-          mode,
-          previousReviewTaskId: latest?.taskId ?? null,
-        });
-        watchReview(res.reviewTaskId);
-        return { quoteId, quoteLabel: doc.label, outcome: res.recovered ? "up_to_date" : "started", reviewTaskId: res.reviewTaskId, reason: null };
-      } catch (err) {
-        if (err instanceof AppRequestError && err.code === "sources_too_large" && attempt.length > 1) {
-          attempt = attempt.slice(0, -1);
-          continue;
-        }
-        throw err;
-      }
+    const loaded = await Promise.all(refs.map((ref) => reader.load(ref)));
+    const chars = (count: number) => loaded.slice(0, count).flatMap((s) => s.documents).reduce((n, d) => n + d.text.length, 0);
+    while (attempt.length > 1 && chars(attempt.length) > e.PROMISEGUARD_MAX_SOURCE_CHARS) attempt = attempt.slice(0, -1);
+    if (chars(attempt.length) > e.PROMISEGUARD_MAX_SOURCE_CHARS) return skip("The most recent source exceeds the review text limit.", doc.label);
+    const hashes = await readSourceHashes(reader, attempt);
+    const fingerprint = evidenceFingerprint(doc.versionHash, hashes, discoveryKeys(scan), mode);
+    const same = forQuote.find((r) => r.mode === mode && r.promptVersion === PROMPT_VERSION && r.discoveredSourceKeys &&
+      evidenceFingerprint(r.quoteHash ?? "", r.sourceHashes, r.discoveredSourceKeys, mode) === fingerprint);
+    if (same && (ACTIVE_RUN.has(same.runState ?? "") || (same.runState === "completed" && same.coverageComplete === true && same.discoveryComplete))) {
+      if (ACTIVE_RUN.has(same.runState ?? "")) watchReview(same.taskId, opts.deadline);
+      return { quoteId, quoteLabel: doc.label, outcome: "up_to_date", reviewTaskId: same.taskId, reason: "The quote and evidence contents are unchanged." };
     }
+    if (same && trigger !== "manual") return { quoteId, quoteLabel: doc.label, outcome: "skipped", reviewTaskId: same.taskId, reason: "The last review failed or was incomplete. Use Review now to retry." };
+    const res = await startReview({
+      dealId: deal.id,
+      quoteId: quote.id,
+      sourceRefs: attempt,
+      matchConfirmed: false,
+      requestId: same ? crypto.randomUUID() : deterministicId(`auto-v2|${quote.id}|${fingerprint}`),
+      expectedFingerprint: fingerprint,
+      mode,
+      previousReviewTaskId: latest?.taskId ?? null,
+      trigger: trigger === "send" ? "manual" : trigger,
+      ...(opts.event && trigger === "webhook" ? { triggerEvent: opts.event } : {}),
+    });
+    watchReview(res.reviewTaskId, opts.deadline);
+    return { quoteId, quoteLabel: doc.label, outcome: res.recovered ? "up_to_date" : "started", reviewTaskId: res.reviewTaskId, reason: null };
   });
 }
 
 /** Run an automatic review and record it in the activity log; never throws. */
-export async function runAutoReview(quoteId: string, trigger: AutopilotEvent["trigger"], event: string): Promise<AutoResult> {
+export async function runAutoReview(
+  quoteId: string,
+  trigger: AutopilotEvent["trigger"],
+  event: string,
+  deadline?: number,
+): Promise<AutoResult> {
   try {
-    const r = await autoReviewQuote(quoteId, trigger);
+    const r = await autoReviewQuote(quoteId, trigger, { event, deadline });
     record({
       quoteId,
       quoteLabel: r.quoteLabel,
@@ -259,29 +281,35 @@ export async function runAutoReview(quoteId: string, trigger: AutopilotEvent["tr
   }
 }
 
-/** Debounce bursts of quote edits into one review after a quiet period. */
-export function enqueueAutoReview(quoteId: string, event: string) {
-  const existing = store.timers.get(quoteId);
-  if (existing) clearTimeout(existing);
-  const delay = env().PROMISEGUARD_AUTOPILOT_DELAY_SECONDS * 1000;
-  store.timers.set(
-    quoteId,
-    setTimeout(() => {
-      store.timers.delete(quoteId);
-      void runAutoReview(quoteId, "webhook", event);
-    }, delay),
-  );
-  record({ quoteId, quoteLabel: null, trigger: "webhook", event, outcome: `Queued (review starts after ${delay / 1000}s without further edits)`, reviewTaskId: null });
+/** Webhook body (inside after()): wait for edits to settle, and step aside if a newer edit arrived meanwhile. */
+export async function settleThenReview(quoteId: string, event: string, deadline = Date.now() + BACKGROUND_BUDGET_MS): Promise<void> {
+  const delayMs = env().PROMISEGUARD_AUTOPILOT_DELAY_SECONDS * 1000;
+  let before: string | null = null;
+  try {
+    before = (await getQuote(quoteId)).updatedAt;
+  } catch (err) {
+    record({ quoteId, quoteLabel: null, trigger: "webhook", event, outcome: `Failed: ${err instanceof Error ? err.message : "quote could not be read"}`, reviewTaskId: null });
+    return;
+  }
+  if (delayMs > 0) await sleep(Math.min(delayMs, Math.max(0, deadline - Date.now() - 5_000)));
+  const latest = await getQuote(quoteId).catch(() => null);
+  if (latest && before && latest.updatedAt && latest.updatedAt !== before) {
+    record({ quoteId, quoteLabel: null, trigger: "webhook", event, outcome: "Skipped: a newer edit arrived; its own event reviews the final version", reviewTaskId: null });
+    return;
+  }
+  await runAutoReview(quoteId, "webhook", event, deadline);
 }
 
-/** Finalize a review on the server while nobody has its page open. Idempotent; one watcher per review. */
-export function watchReview(reviewTaskId: string) {
+/** Finalizes a review in the background until the deadline; anything unfinished finalizes on the next view. */
+export function watchReview(reviewTaskId: string, deadline = Date.now() + BACKGROUND_BUDGET_MS) {
   if (store.watching.has(reviewTaskId)) return;
   store.watching.add(reviewTaskId);
   const run = async () => {
     try {
-      for (let i = 0; i < 60; i++) {
-        await new Promise((r) => setTimeout(r, i < 10 ? 3000 : 8000));
+      for (let i = 0; ; i++) {
+        const wait = i < 10 ? 3000 : 6000;
+        if (Date.now() + wait > deadline) return;
+        await sleep(wait);
         const res = await finalizeReview(reviewTaskId).catch(() => null);
         if (res && !ACTIVE_RUN.has(res.state)) return;
       }
@@ -292,13 +320,10 @@ export function watchReview(reviewTaskId: string) {
   try {
     after(run);
   } catch {
-    // Outside a request (e.g. a debounced webhook timer): run detached on this long-lived server.
+    // Outside a request scope (only possible on a long-running server): run detached.
     void run();
   }
 }
-
-// ---------------------------------------------------------------------------------------------
-// Quote sent without a clean review
 
 export async function alertIfSentWithGaps(quoteId: string): Promise<void> {
   try {
@@ -311,13 +336,13 @@ export async function alertIfSentWithGaps(quoteId: string): Promise<void> {
     const lines = [
       `The quote "${d.quoteLabel}" was sent while PromiseGuard's gate showed: ${d.gate.label}.`,
       ...d.gate.reasons,
-      ...d.openItems.map((i) => `- ${i.coverage.replace("_", " ")}: ${i.commitment}`),
+      ...d.openItems.map((i) => `- ${i.coverage.replace("_", " ")}${i.riskLevel === "high" ? ", high commercial risk" : ""}: ${i.commitment}`),
       d.gate.reviewTaskId ? `Latest review task: ${d.gate.reviewTaskId}` : "",
       "Decision support only; not a determination of contractual liability.",
     ].filter(Boolean);
     const task = await createTask(
       {
-        title: `${prefix} Quote sent with open promise gaps: ${d.quoteLabel.replace(/^\[PromiseGuard Demo\]\s*/, "")}`.slice(0, 250),
+        title: `${prefix} Quote sent with open promise risks: ${d.quoteLabel.replace(/^\[PromiseGuard Demo\]\s*/, "")}`.slice(0, 250),
         description: lines.join("\n"),
         entity_type: "deal",
         entity_id: d.dealId,
@@ -332,13 +357,9 @@ export async function alertIfSentWithGaps(quoteId: string): Promise<void> {
   }
 }
 
-// ---------------------------------------------------------------------------------------------
-// Guarded send
-
 export type SendResult = {
   mode: Mode;
   sent: boolean;
-  /** Demo mode renders the send through Graph8's send-preview; nothing reaches the buyer. */
   preview: { subject: string | null; recipient: string | null } | null;
   status: string | null;
   overrideNoteId: string | null;
@@ -368,9 +389,9 @@ export async function guardedSend(
       const note = await createDealNote(
         d.dealId,
         [
-          `${PROMISEGUARD_NOTE_PREFIX} Quote "${d.quoteLabel}" ${d.mode === "demo" ? "send preview requested" : "sent"} with the gate overridden.`,
+          `${PROMISEGUARD_NOTE_PREFIX} Quote "${d.quoteLabel}" ${d.mode === "demo" ? "send preview requested" : "send requested"} with the gate overridden.`,
           `Gate: ${d.gate.label}. ${d.gate.reasons.join(" ")}`,
-          ...d.openItems.map((i) => `- ${i.coverage.replace("_", " ")}: ${i.commitment}`),
+          ...d.openItems.map((i) => `- ${i.coverage.replace("_", " ")}${i.riskLevel === "high" ? ", high commercial risk" : ""}: ${i.commitment}`),
           `Reason given: ${override}`,
         ].join("\n"),
       );
@@ -395,9 +416,6 @@ export async function guardedSend(
     return { mode: "live", sent: true, preview: null, status: res.status, overrideNoteId };
   });
 }
-
-// ---------------------------------------------------------------------------------------------
-// Board
 
 export type GuardRow = {
   quoteId: string;
@@ -424,8 +442,7 @@ export type GuardBoard = {
   };
 };
 
-export const WEBHOOK_EVENTS = ["quote.created", "quote.updated", "quote.sent"];
-export const WEBHOOK_PATH = "/api/webhooks/graph8";
+const WEBHOOK_PATH = "/api/webhooks/graph8";
 
 export async function guardBoard(mode: Mode): Promise<GuardBoard> {
   const e = env();
@@ -465,11 +482,14 @@ export async function guardBoard(mode: Mode): Promise<GuardBoard> {
   );
 
   // List rows omit line items, so the content hash comes from the quote detail.
+  const readers = new Map([...deals].map(([id, deal]) => [id, evidenceReader(deal, modeForDeal(deal))]));
   const rows = await Promise.all(
     selected.map(async (listed): Promise<GuardRow> => {
-      const q = await getQuote(listed.id).catch(() => listed);
+      let quoteReadFailed = false;
+      const q = await getQuote(listed.id).catch(() => { quoteReadFailed = true; return listed; });
       const doc = quoteToDocument(q, e.PROMISEGUARD_MAX_QUOTE_CHARS);
-      const gate = evaluateGate(q, doc.versionHash, q.dealId ? reviewsByDeal.get(q.dealId) ?? [] : []);
+      let gate = await freshGate(q, doc.versionHash, q.dealId ? reviewsByDeal.get(q.dealId) ?? [] : [], q.dealId ? deals.get(q.dealId) ?? null : null, q.dealId ? readers.get(q.dealId) : undefined);
+      if (quoteReadFailed) gate = { ...gate, state: "incomplete", label: GATE_LABEL.incomplete, reasons: ["The current quote could not be read. Retry before sending."] };
       if (gate.state === "reviewing" && gate.reviewTaskId) watchReview(gate.reviewTaskId);
       return {
         quoteId: q.id,
@@ -506,10 +526,43 @@ export async function guardBoard(mode: Mode): Promise<GuardBoard> {
       webhookRegistered,
       webhookEvents,
       delaySeconds: e.PROMISEGUARD_AUTOPILOT_DELAY_SECONDS,
-      activity: store.activity.slice(0, 20),
+      activity: mergeActivity(rows, reviewsByDeal),
     },
   };
 }
 
-/** Quote IDs on the board that an automatic review would act on. */
+const TRIGGER_EVENT: Record<string, string> = { webhook: "Graph8 webhook", scan: "Scan now", manual: "Review now", user: "Check promises" };
+
+function reviewOutcome(r: ReviewSummary): string {
+  if (r.runState && ACTIVE_RUN.has(r.runState)) return "Review running in Graph8";
+  if (r.runState === "completed") {
+    const open = r.open ?? 0;
+    return open > 0 ? `Reviewed: ${open} promise risk(s) open` : r.coverageComplete ? "Reviewed: no open risks" : "Reviewed: coverage incomplete";
+  }
+  if (r.runState === "stale") return "Review stale: evidence changed during the run";
+  return `Review failed${r.runError ? `: ${r.runError}` : ""}`;
+}
+
+function mergeActivity(rows: GuardRow[], reviewsByDeal: Map<string, ReviewSummary[]>): AutopilotEvent[] {
+  const labels = new Map(rows.map((r) => [r.quoteId, r.quoteLabel]));
+  const saved: AutopilotEvent[] = [...reviewsByDeal.values()]
+    .flat()
+    .filter((r) => r.quoteId && (r.trigger === "webhook" || r.trigger === "scan" || r.trigger === "manual"))
+    .map((r) => ({
+      at: r.createdAt ?? new Date(0).toISOString(),
+      source: "graph8" as const,
+      quoteId: r.quoteId!,
+      quoteLabel: labels.get(r.quoteId!) ?? r.quoteLabel,
+      trigger: r.trigger as AutopilotEvent["trigger"],
+      event: r.triggerEvent ?? TRIGGER_EVENT[r.trigger ?? "manual"],
+      outcome: reviewOutcome(r),
+      reviewTaskId: r.taskId,
+    }));
+  const savedIds = new Set(saved.map((e) => e.reviewTaskId));
+  const local = store.activity
+    .filter((e) => !(e.reviewTaskId && savedIds.has(e.reviewTaskId) && e.outcome.startsWith("Review")))
+    .map((e) => ({ ...e, source: "server" as const }));
+  return [...saved, ...local].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 20);
+}
+
 export const needsReview = (r: GuardRow) => r.gate.state === "no_review" || r.gate.state === "changed";

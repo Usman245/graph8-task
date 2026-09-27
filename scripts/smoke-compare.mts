@@ -12,15 +12,15 @@ const input_data = {
   sources_json: JSON.stringify([
     {
       document_id: "sample:smoke:m1",
-      speaker: "Sam (seller)",
+      speaker: "Maya (seller)",
       speaker_side: "seller",
       occurred_at: "2026-09-10T15:00:00Z",
-      text: "We will migrate your existing customer records as part of the setup.",
+      text: "We'll run your TikTok as well as your Instagram and Facebook.",
     },
   ]),
   quote_json: JSON.stringify({
     text_complete: true,
-    parts: [{ part_id: "quote:smoke:field:terms_content", text: "Data migration: excluded." }],
+    parts: [{ part_id: "quote:smoke:field:terms_content", text: "TikTok is not included." }],
   }),
   output_schema_json: JSON.stringify(MODEL_OUTPUT_SCHEMA),
 };

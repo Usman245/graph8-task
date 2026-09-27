@@ -5,15 +5,17 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { SendDialog, gateKey } from "@/components/guard/send-dialog";
-import { COVERAGE_LABEL, CoverageBadge, EmptyPanel, ErrorPanel, GateBadge, ModeBadge, SampleBadge } from "@/components/status";
+import { COVERAGE_LABEL, CoverageBadge, EmptyPanel, ErrorPanel, GateBadge, ModeBadge, RiskBadge, SampleBadge } from "@/components/status";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatDate } from "@/components/ui/format";
+import { Notice, PageHeader, StatTile } from "@/components/ui/page-header";
 import { ApiError, api } from "@/lib/api/client-fetch";
 import type { QuoteGateDetail } from "@/lib/promiseguard/guard";
 import type { FinalizeResult, ReviewView } from "@/lib/promiseguard/runs";
 import type { Finding } from "@/lib/promiseguard/schemas";
 import { FindingDrawer } from "./finding-drawer";
+import { PromiseHandoff } from "./promise-handoff";
 
 const ACTIVE = new Set(["preparing", "running", "start_unknown"]);
 
@@ -83,14 +85,26 @@ export function ReviewWorkspace({ reviewTaskId }: { reviewTaskId: string }) {
     }
   }
 
-  if (query.isPending) return <div className="h-64 animate-pulse rounded-lg bg-surface-muted" aria-label="Loading review" />;
+  if (query.isPending) {
+    return (
+      <div className="space-y-6" aria-label="Loading review">
+        <div className="h-20 w-2/3 animate-pulse rounded-2xl bg-surface-muted" />
+        <div className="h-48 animate-pulse rounded-2xl bg-surface-muted" />
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="h-24 animate-pulse rounded-2xl bg-surface-muted" />
+          ))}
+        </div>
+      </div>
+    );
+  }
   if (query.isError) {
     return <ErrorPanel message={`Could not load this review from Graph8. ${query.error.message}`} onRetry={() => query.refetch()} />;
   }
   if (!view || !m) {
     return (
-      <div className="space-y-3">
-        <h1 className="text-2xl font-semibold">{view?.taskTitle ?? "Review"}</h1>
+      <div className="space-y-4">
+        <PageHeader title={view?.taskTitle ?? "Review"} />
         <ErrorPanel message={view?.readOnlyReason ?? "This review cannot be displayed."} />
       </div>
     );
@@ -102,51 +116,59 @@ export function ReviewWorkspace({ reviewTaskId }: { reviewTaskId: string }) {
   const fresh = freshness.data?.freshness;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <Link href={`/deals/${encodeURIComponent(m.dealId)}`} className="text-sm text-muted hover:text-foreground">
-          ← {m.dealName}
-        </Link>
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <h1 className="text-2xl font-semibold">Review of {m.quoteLabel}</h1>
-          <ModeBadge mode={m.mode} />
-          {isDemo && <SampleBadge />}
-          {m.runState === "completed" &&
-            (fresh === "current" ? (
-              <Badge tone="covered">Current</Badge>
-            ) : fresh === "changed" ? (
-              <Badge tone="missing">Source changed</Badge>
-            ) : fresh === "unknown" ? (
-              <Badge>Freshness unknown</Badge>
-            ) : null)}
-          <Badge tone="neutral">Saved in Graph8</Badge>
-        </div>
-        <p className="mt-1 text-sm text-muted">
-          {m.completedAt ? `Compared ${formatDate(m.completedAt, true)}` : `Started ${formatDate(m.createdAt, true)}`} · {m.sourceRefs.length}{" "}
-          source(s) · Graph8 review task {view.taskStatus ?? ""}
-          {m.previousReviewTaskId && (
-            <>
-              {" · "}
-              <Link className="text-primary hover:underline" href={`/reviews/${encodeURIComponent(m.previousReviewTaskId)}`}>
-                previous review
-              </Link>
-            </>
-          )}
-        </p>
-        <ul className="mt-2 flex flex-wrap gap-2 text-xs">
-          {m.sourceRefs.map((r) => (
-            <li key={`${r.kind}:${r.id}`} className="rounded bg-surface-muted px-2 py-1">
-              {m.sourceLabels[`${r.kind}:${r.id}`] ?? `${r.kind} ${r.id}`}
-            </li>
-          ))}
-        </ul>
-      </div>
+    <div className="space-y-8">
+      <PageHeader
+        back={{ href: `/deals/${encodeURIComponent(m.dealId)}`, label: m.dealName }}
+        eyebrow="Promise review"
+        title={m.quoteLabel}
+        badges={
+          <>
+            <ModeBadge mode={m.mode} />
+            {isDemo && <SampleBadge />}
+            {m.runState === "completed" &&
+              (fresh === "current" ? (
+                <Badge tone="covered">Current</Badge>
+              ) : fresh === "changed" ? (
+                <Badge tone="missing">Source changed</Badge>
+              ) : fresh === "unknown" ? (
+                <Badge>Freshness unknown</Badge>
+              ) : null)}
+            <Badge tone="neutral">Saved in Graph8</Badge>
+          </>
+        }
+        description={
+          <>
+            <p>
+              {m.completedAt ? `Compared ${formatDate(m.completedAt, true)}` : `Started ${formatDate(m.createdAt, true)}`} · {m.sourceRefs.length}{" "}
+              source(s) · Graph8 review task {view.taskStatus ?? ""}
+              {m.previousReviewTaskId && (
+                <>
+                  {" · "}
+                  <Link className="pg-link" href={`/reviews/${encodeURIComponent(m.previousReviewTaskId)}`}>
+                    previous review
+                  </Link>
+                </>
+              )}
+            </p>
+            <ul className="mt-3 flex flex-wrap gap-2 text-xs">
+              {m.sourceRefs.map((r) => (
+                <li key={`${r.kind}:${r.id}`} className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-2.5 py-1 text-foreground">
+                  <svg aria-hidden viewBox="0 0 16 16" className="h-3.5 w-3.5 text-muted" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2v-7Z" strokeLinejoin="round" />
+                  </svg>
+                  {m.sourceLabels[`${r.kind}:${r.id}`] ?? `${r.kind} ${r.id}`}
+                </li>
+              ))}
+            </ul>
+          </>
+        }
+      />
 
       {isDemo && (
-        <p className="rounded-md bg-missing-soft p-3 text-sm text-missing">
+        <Notice tone="missing">
           Sales evidence in this review is the labeled sample conversation (synthetic). The deal, quote, comparison run, and saved review
           are real Graph8 records.
-        </p>
+        </Notice>
       )}
 
       <RunStatus
@@ -165,22 +187,29 @@ export function ReviewWorkspace({ reviewTaskId }: { reviewTaskId: string }) {
         <>
           <SendGateBar quoteId={m.quoteId} reviewTaskId={reviewTaskId} />
           <MainFinding view={view} onOpen={setOpenFinding} />
-          <section aria-label="Summary" className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {(["conflict", "missing", "needs_review", "covered"] as const).map((k) => (
-              <div key={k} className="rounded-lg border border-border bg-surface p-4">
-                <CoverageBadge coverage={k} />
-                <p className="mt-2 text-2xl font-semibold">{view.counts?.[k] ?? 0}</p>
-              </div>
-            ))}
-          </section>
-          <p className="text-xs text-muted">
-            Counts apply only to the selected evidence. {view.awaitingReview} finding(s) awaiting a human decision. Decision support only; not
-            a determination of contractual liability.
-          </p>
+          <div className="space-y-2">
+            <section aria-label="Summary" className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {(
+                [
+                  ["conflict", "conflict"],
+                  ["missing", "missing"],
+                  ["needs_review", "review"],
+                  ["covered", "covered"],
+                ] as const
+              ).map(([k, tone]) => (
+                <StatTile key={k} tone={tone} label={<CoverageBadge coverage={k} />} value={view.counts?.[k] ?? 0} />
+              ))}
+            </section>
+            <p className="text-xs text-muted">
+              Counts apply only to the selected evidence. {view.awaitingReview} finding(s) awaiting a human decision. Decision support only; not
+              a determination of contractual liability.
+            </p>
+          </div>
+          <CommercialRiskSummary findings={report} promptVersion={m.promptVersion} onOpen={setOpenFinding} />
 
           {(m.coverageNotes.length > 0 || m.rejected.length > 0) && (
-            <div className="space-y-2 rounded-lg border border-missing/30 bg-missing-soft p-4 text-sm text-missing">
-              <p className="font-medium">{m.coverageComplete ? "Notes" : "Coverage limitations"}</p>
+            <div className="space-y-2 rounded-2xl border border-missing/25 bg-missing-soft p-5 text-sm text-missing">
+              <p className="font-semibold">{m.coverageComplete ? "Notes" : "Coverage limitations"}</p>
               <ul className="list-disc space-y-0.5 pl-5">
                 {m.coverageNotes.map((n) => (
                   <li key={n}>{n}</li>
@@ -188,7 +217,7 @@ export function ReviewWorkspace({ reviewTaskId }: { reviewTaskId: string }) {
               </ul>
               {m.rejected.length > 0 && (
                 <details>
-                  <summary className="cursor-pointer">Rejected model findings ({m.rejected.length})</summary>
+                  <summary className="cursor-pointer font-medium">Rejected model findings ({m.rejected.length})</summary>
                   <ul className="mt-1 list-disc pl-5">
                     {m.rejected.map((r, i) => (
                       <li key={i}>
@@ -201,14 +230,22 @@ export function ReviewWorkspace({ reviewTaskId }: { reviewTaskId: string }) {
             </div>
           )}
 
-          {report.length === 0 ? (
-            <EmptyPanel title="No explicit seller commitments were found in the selected evidence.">
-              This is not a statement that the deal carries no risk; only the selected sources were checked.
-            </EmptyPanel>
-          ) : (
-            <FindingsTable findings={report} view={view} onOpen={setOpenFinding} />
-          )}
-          <div className="flex flex-wrap items-center gap-3">
+          <section aria-labelledby="findings-h" className="space-y-4">
+            <h2 id="findings-h" className="text-xl font-semibold tracking-tight">
+              All findings
+            </h2>
+            {report.length === 0 ? (
+              <EmptyPanel title="No explicit seller commitments were found in the selected evidence.">
+                This is not a statement that the deal carries no risk; only the selected sources were checked.
+              </EmptyPanel>
+            ) : (
+              <FindingsTable findings={report} view={view} onOpen={setOpenFinding} />
+            )}
+          </section>
+
+          <PromiseHandoff reviewTaskId={reviewTaskId} />
+
+          <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-dashed border-border px-5 py-4">
             <Button variant="secondary" onClick={recheck}>
               Recheck against current versions
             </Button>
@@ -232,6 +269,59 @@ export function ReviewWorkspace({ reviewTaskId }: { reviewTaskId: string }) {
   );
 }
 
+function CommercialRiskSummary({ findings, promptVersion, onOpen }: { findings: Finding[]; promptVersion: string; onOpen: (id: string) => void }) {
+  const assessed = findings.filter((f) => f.commercialRisk);
+  if (assessed.length === 0) {
+    return (
+      <section aria-labelledby="risk-h" className="pg-card p-5">
+        <h2 id="risk-h" className="text-lg font-semibold tracking-tight">Promise feasibility</h2>
+        <p className="mt-1 text-sm text-muted">
+          {promptVersion === "pg-v4"
+            ? "No commitments were available for a feasibility assessment."
+            : "This older review has no commercial-risk assessment. Recheck it after installing the pg-v4 Graph8 skill."}
+        </p>
+      </section>
+    );
+  }
+  const order = { high: 0, medium: 1, unknown: 2, low: 3 } as const;
+  const ranked = [...assessed].sort((a, b) => order[a.commercialRisk!.level] - order[b.commercialRisk!.level]);
+  const attention = ranked.filter((f) => f.commercialRisk!.level === "high" || f.commercialRisk!.level === "medium");
+  const high = ranked.filter((f) => f.commercialRisk!.level === "high").length;
+  const medium = ranked.filter((f) => f.commercialRisk!.level === "medium").length;
+  return (
+    <section aria-labelledby="risk-h" className="pg-card p-5 sm:p-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 id="risk-h" className="text-lg font-semibold tracking-tight">Promise feasibility</h2>
+          <p className="mt-1 text-sm text-muted">Graph8 AI checks guarantees, vague success metrics, open-ended scope, dependencies, timing, and unpriced work.</p>
+        </div>
+        <div className="flex gap-2"><Badge tone={high ? "conflict" : "neutral"}>{high} high</Badge><Badge tone={medium ? "missing" : "neutral"}>{medium} medium</Badge></div>
+      </div>
+      {attention.length === 0 ? (
+        <Notice tone="covered" className="mt-4">No high- or medium-risk promise was found in the selected evidence.</Notice>
+      ) : (
+        <ul className="mt-4 space-y-2">
+          {attention.map((f) => (
+            <li
+              key={f.id}
+              className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border-l-4 bg-background p-4 text-sm ${
+                f.commercialRisk!.level === "high" ? "border-l-conflict" : "border-l-missing"
+              }`}
+            >
+              <div className="min-w-0 flex-1">
+                <p className="flex flex-wrap items-center gap-2 font-semibold"><RiskBadge level={f.commercialRisk!.level} /> {f.commitment}</p>
+                <p className="mt-1 text-muted">{f.commercialRisk!.reason}</p>
+              </div>
+              <Button variant="secondary" className="px-3 py-1.5" onClick={() => onOpen(f.id)}>Review risk</Button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="mt-3 text-xs text-muted">Grounded in the selected evidence and quote only. It does not know your internal capacity or actual margin unless those facts are present.</p>
+    </section>
+  );
+}
+
 /** Send-gate state for this review's quote (based on the quote's latest review, which may be newer than this one). */
 function SendGateBar({ quoteId, reviewTaskId }: { quoteId: string; reviewTaskId: string }) {
   const [open, setOpen] = useState(false);
@@ -242,21 +332,33 @@ function SendGateBar({ quoteId, reviewTaskId }: { quoteId: string; reviewTaskId:
   const d = gate.data;
   const newer = d?.gate.reviewTaskId && d.gate.reviewTaskId !== reviewTaskId ? d.gate.reviewTaskId : null;
   return (
-    <section aria-label="Send gate" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface px-4 py-3">
-      <div className="space-y-0.5 text-sm">
+    <section
+      aria-label="Send gate"
+      className={`pg-card flex flex-wrap items-center justify-between gap-4 border-l-4 px-5 py-4 ${
+        d?.gate.state === "clear" ? "border-l-covered" : d?.gate.state === "at_risk" ? "border-l-conflict" : "border-l-border"
+      }`}
+    >
+      <div className="flex min-w-0 items-start gap-3 text-sm">
+        <span aria-hidden className="mt-0.5 inline-flex h-9 w-9 flex-none items-center justify-center rounded-xl bg-surface-muted text-foreground">
+          <svg viewBox="0 0 16 16" className="h-4.5 w-4.5" fill="none" stroke="currentColor" strokeWidth="1.6">
+            <path d="M8 1.8 3 3.6v3.7c0 3 2.1 5.4 5 6.5 2.9-1.1 5-3.5 5-6.5V3.6L8 1.8Z" strokeLinejoin="round" />
+          </svg>
+        </span>
+        <div className="min-w-0 space-y-0.5">
         <p className="flex flex-wrap items-center gap-2">
-          <span className="font-medium">Quote Guard</span>
+          <span className="font-semibold">Quote Guard</span>
           {d ? <GateBadge state={d.gate.state} /> : gate.isError ? <Badge>Unavailable</Badge> : <Badge>Checking…</Badge>}
         </p>
         {d?.gate.reasons[0] && <p className="text-muted">{d.gate.reasons[0]}</p>}
         {newer && (
           <p className="text-muted">
             Based on a newer review:{" "}
-            <Link className="text-primary hover:underline" href={`/reviews/${encodeURIComponent(newer)}`}>
+            <Link className="pg-link" href={`/reviews/${encodeURIComponent(newer)}`}>
               open it
             </Link>
           </p>
         )}
+        </div>
       </div>
       <Button variant={d?.gate.state === "clear" ? "primary" : "secondary"} disabled={!d || d.gate.state === "closed"} onClick={() => setOpen(true)}>
         Send quote…
@@ -266,7 +368,6 @@ function SendGateBar({ quoteId, reviewTaskId }: { quoteId: string; reviewTaskId:
   );
 }
 
-/** The most important finding, stated plainly: first conflict, otherwise first missing item. */
 function MainFinding({ view, onOpen }: { view: ReviewView; onOpen: (id: string) => void }) {
   const m = view.manifest!;
   const report = m.report ?? [];
@@ -281,46 +382,46 @@ function MainFinding({ view, onOpen }: { view: ReviewView; onOpen: (id: string) 
   return (
     <section
       aria-labelledby="main-finding-h"
-      className={`rounded-xl border-2 p-5 ${isConflict ? "border-conflict/40 bg-conflict-soft" : "border-missing/40 bg-missing-soft"}`}
+      className={`pg-rise relative overflow-hidden rounded-2xl border p-5 sm:p-7 ${isConflict ? "border-conflict/30 bg-conflict-soft" : "border-missing/30 bg-missing-soft"}`}
     >
       <div className="flex flex-wrap items-center gap-2">
         <CoverageBadge coverage={main.coverage} />
-        <h2 id="main-finding-h" className="text-lg font-semibold">
+        <h2 id="main-finding-h" className="text-xl font-semibold tracking-tight">
           {isConflict ? "Main conflict" : "Main gap"}: {main.commitment}
         </h2>
       </div>
 
-      <div className="mt-4 grid gap-3 md:grid-cols-2">
-        <figure className="rounded-lg bg-surface p-4">
-          <figcaption className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted">
+      <div className="mt-5 grid gap-3 md:grid-cols-2">
+        <figure className="rounded-xl border-l-4 border-l-primary bg-surface p-4 shadow-sm">
+          <figcaption className="pg-eyebrow flex flex-wrap items-center gap-2">
             Sales promised
             {doc?.synthetic && <SampleBadge />}
           </figcaption>
-          <blockquote className="mt-2 whitespace-pre-wrap">&ldquo;{sales?.excerpt}&rdquo;</blockquote>
+          <blockquote className="mt-2 whitespace-pre-wrap text-[15px] leading-relaxed">&ldquo;{sales?.excerpt}&rdquo;</blockquote>
           <p className="mt-2 text-xs text-muted">
             {doc?.speaker ?? "Unknown speaker"} · {doc?.source ?? "Unknown source"}
             {doc?.synthetic ? " (synthetic sample, not a Graph8 record)" : ""}
           </p>
         </figure>
-        <figure className="rounded-lg bg-surface p-4">
-          <figcaption className="text-xs font-semibold uppercase tracking-wide text-muted">
+        <figure className={`rounded-xl border-l-4 bg-surface p-4 shadow-sm ${isConflict ? "border-l-conflict" : "border-l-missing"}`}>
+          <figcaption className="pg-eyebrow">
             {isConflict ? "But the quote says" : "The quote says"}
           </figcaption>
-          <blockquote className="mt-2 whitespace-pre-wrap">
+          <blockquote className="mt-2 whitespace-pre-wrap text-[15px] leading-relaxed">
             {quote ? <>&ldquo;{quote.excerpt}&rdquo;</> : <span className="text-muted">Nothing. No clause in the quote covers this.</span>}
           </blockquote>
           <p className="mt-2 text-xs text-muted">{m.quoteLabel}</p>
         </figure>
       </div>
 
-      <div className="mt-4 rounded-lg bg-surface p-4">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted">Suggested action</p>
+      <div className="mt-3 rounded-xl bg-surface/70 p-4">
+        <p className="pg-eyebrow">Suggested action</p>
         <p className="mt-1">{main.suggestedAction}</p>
         {main.conditions.length > 0 && <p className="mt-1 text-sm text-muted">Condition: {main.conditions.join("; ")}</p>}
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center gap-3">
-        <Button onClick={() => onOpen(main.id)}>View evidence and assign</Button>
+      <div className="mt-5 flex flex-wrap items-center gap-3">
+        <Button onClick={() => onOpen(main.id)}>View evidence and assign →</Button>
         {others > 0 && (
           <span className="text-sm text-muted">
             {others} more {isConflict ? "conflict" : "missing item"}
@@ -350,8 +451,8 @@ function RunStatus({
 
   if (m.runState === "failed" || m.runState === "stale") {
     return (
-      <div role="alert" className="space-y-3 rounded-lg border border-conflict/30 bg-conflict-soft p-4 text-sm text-conflict">
-        <p className="font-medium">{m.runState === "stale" ? "Evidence changed during the comparison" : "The comparison did not complete"}</p>
+      <div role="alert" className="space-y-3 rounded-2xl border border-conflict/25 bg-conflict-soft p-5 text-sm text-conflict">
+        <p className="text-base font-semibold">{m.runState === "stale" ? "Evidence changed during the comparison" : "The comparison did not complete"}</p>
         <p>{m.runError?.message ?? "No findings are shown."}</p>
         <Button variant="secondary" onClick={onRecheck}>
           Run a new comparison
@@ -366,11 +467,20 @@ function RunStatus({
     m.runState === "preparing" ? 0 : finalizing ? 2 : view.execution?.terminal ? 3 : 1;
 
   return (
-    <div className="space-y-3 rounded-lg border border-border bg-surface p-4" aria-live="polite">
-      <ol className="flex flex-wrap gap-2 text-sm">
+    <div className="pg-card space-y-5 p-5 sm:p-6" aria-live="polite">
+      <ol className="grid gap-3 text-sm sm:grid-cols-4">
         {stages.map((s, i) => (
-          <li key={s} className={`rounded px-2 py-1 ${i < current ? "bg-covered-soft text-covered" : i === current ? "bg-primary-soft font-medium text-primary" : "bg-surface-muted text-muted"}`}>
-            {i + 1}. {s}
+          <li key={s} className="space-y-2">
+            <span
+              aria-hidden
+              className={`block h-1.5 overflow-hidden rounded-full ${i < current ? "bg-covered" : i === current ? "bg-primary-soft" : "bg-surface-muted"}`}
+            >
+              {i === current && <span className="block h-full w-1/2 animate-pulse rounded-full bg-primary" />}
+            </span>
+            <span className={`flex items-center gap-2 ${i < current ? "text-covered" : i === current ? "font-semibold text-primary" : "text-muted"}`}>
+              <span className="font-mono text-xs">{i < current ? "✓" : `0${i + 1}`}</span>
+              {s}
+            </span>
           </li>
         ))}
       </ol>
@@ -412,39 +522,47 @@ function FindingsTable({ findings, view, onOpen }: { findings: Finding[]; view: 
   const order = { conflict: 0, missing: 1, needs_review: 2, covered: 3 };
   const sorted = [...findings].sort((a, b) => order[a.coverage] - order[b.coverage]);
   return (
-    <div className="overflow-x-auto rounded-lg border border-border bg-surface">
-      <table className="w-full min-w-[720px] text-left text-sm">
+    <div className="pg-card overflow-x-auto">
+      <table className="pg-table min-w-[760px]">
         <caption className="sr-only">Findings</caption>
-        <thead className="border-b border-border text-xs uppercase tracking-wide text-muted">
+        <thead>
           <tr>
-            <th className="px-4 py-2 font-medium">Commitment</th>
-            <th className="px-4 py-2 font-medium">Category</th>
-            <th className="px-4 py-2 font-medium">Coverage</th>
-            <th className="px-4 py-2 font-medium">Source date</th>
-            <th className="px-4 py-2 font-medium">Action</th>
-            <th className="px-4 py-2" />
+            <th>Commitment</th>
+            <th>Category</th>
+            <th>Coverage</th>
+            <th>Feasibility</th>
+            <th>Source date</th>
+            <th>Action</th>
+            <th />
           </tr>
         </thead>
-        <tbody className="divide-y divide-border">
+        <tbody>
           {sorted.map((f) => {
             const state = actionState(f, view);
             const at = docs[f.salesEvidence[0]?.documentId]?.at ?? null;
             return (
-              <tr key={f.id}>
-                <td className="px-4 py-3">
-                  <p className="font-medium">{f.commitment}</p>
+              <tr key={f.id} className="cursor-pointer" onClick={() => onOpen(f.id)}>
+                <td className="max-w-xs">
+                  <p className="font-semibold leading-snug">{f.commitment}</p>
                   {f.adjustment && <p className="text-xs text-muted">Adjusted: {f.adjustment}</p>}
                 </td>
-                <td className="px-4 py-3 capitalize text-muted">{f.category}</td>
-                <td className="px-4 py-3">
+                <td className="capitalize text-muted">{f.category}</td>
+                <td>
                   <CoverageBadge coverage={f.coverage} />
                 </td>
-                <td className="px-4 py-3 text-muted">{formatDate(at)}</td>
-                <td className="px-4 py-3">
+                <td>{f.commercialRisk ? <RiskBadge level={f.commercialRisk.level} /> : <span className="text-muted">Not assessed</span>}</td>
+                <td className="whitespace-nowrap text-muted">{formatDate(at)}</td>
+                <td>
                   <Badge tone={state.tone}>{state.label}</Badge>
                 </td>
-                <td className="px-4 py-3 text-right">
-                  <Button variant="secondary" className="px-3 py-1" onClick={() => onOpen(f.id)} aria-label={`View evidence for ${f.commitment} (${COVERAGE_LABEL[f.coverage]})`}>
+                <td className="text-right">
+                  <Button
+                    variant="secondary"
+                    className="px-3 py-1.5"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpen(f.id);
+                    }} aria-label={`View evidence for ${f.commitment} (${COVERAGE_LABEL[f.coverage]})`}>
                     View evidence
                   </Button>
                 </td>

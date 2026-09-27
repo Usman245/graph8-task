@@ -52,3 +52,72 @@ body {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
 }
+
+html {
+  scroll-padding-top: 5rem;
+}
+
+body {
+  background-image: radial-gradient(900px 420px at 100% -10%, var(--primary-soft), transparent 60%);
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+}
+
+/* Shared motion */
+@keyframes pg-rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes pg-slide-in {
+  from { transform: translateX(24px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+@keyframes pg-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.pg-rise { animation: pg-rise 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.pg-slide-in { animation: pg-slide-in 0.32s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.pg-fade { animation: pg-fade 0.2s ease-out both; }
+@media (prefers-reduced-motion: reduce) {
+  .pg-rise, .pg-slide-in, .pg-fade { animation: none; }
+}
+
+@layer components {
+  .pg-card {
+    @apply rounded-2xl border border-border bg-surface shadow-[0_1px_2px_rgba(28,29,31,0.04)];
+  }
+  .pg-eyebrow {
+    @apply text-[11px] font-semibold uppercase tracking-[0.14em] text-muted;
+  }
+  .pg-field {
+    @apply w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm font-normal shadow-sm transition placeholder:text-muted/70 focus:border-primary/50 focus:outline-none focus:ring-4 focus:ring-primary-soft;
+  }
+  .pg-label {
+    @apply block text-sm font-medium;
+  }
+  .pg-check {
+    @apply h-4 w-4 flex-none rounded border-border accent-[var(--primary)];
+  }
+  .pg-link {
+    @apply font-medium text-primary underline-offset-4 hover:underline;
+  }
+  .pg-table {
+    @apply w-full text-left text-sm;
+  }
+  .pg-table thead {
+    @apply border-b border-border bg-background/60 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted;
+  }
+  .pg-table th {
+    @apply px-4 py-3 font-semibold;
+  }
+  .pg-table td {
+    @apply px-4 py-3.5;
+  }
+  .pg-table tbody tr {
+    @apply transition-colors hover:bg-background/70;
+  }
+  .pg-table tbody {
+    @apply divide-y divide-border;
+  }
+}

@@ -40,3 +40,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# generated presentation and implementation PDFs
+docs/PromiseGuard-Presentation.pdf
+docs/PromiseGuard-Implementation.pdf

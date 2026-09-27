@@ -3,14 +3,14 @@
 
 import { ReviewManifestSchema, summarize, type ReviewManifest } from "./schemas";
 
-export const MANIFEST_BEGIN = "PG_MANIFEST_V1_BEGIN";
-export const MANIFEST_END = "PG_MANIFEST_V1_END";
-export const ISSUE_MARKER = "PG_ISSUE_V1";
+const MANIFEST_BEGIN = "PG_MANIFEST_V1_BEGIN";
+const MANIFEST_END = "PG_MANIFEST_V1_END";
+const ISSUE_MARKER = "PG_ISSUE_V1";
 export const REVIEW_TAG = "promiseguard";
 export const REVIEW_TITLE_PREFIX = "[PromiseGuard]";
 export const DEMO_TITLE_PREFIX = "[PromiseGuard Demo]";
 
-export type ManifestParse =
+type ManifestParse =
   | { ok: true; manifest: ReviewManifest }
   | { ok: false; reason: "missing" | "unsupported_version" | "invalid"; message: string };
 
@@ -23,7 +23,7 @@ function plural(n: number, one: string, many: string) {
   return `${n} ${n === 1 ? one : many}`;
 }
 
-export function humanSummary(m: ReviewManifest): string {
+function humanSummary(m: ReviewManifest): string {
   const lines = ["PromiseGuard quotation review", `Selected quote: ${m.quoteLabel}`, `Deal: ${m.dealName}`];
   lines.push(
     m.mode === "demo"
@@ -32,10 +32,14 @@ export function humanSummary(m: ReviewManifest): string {
   );
   if (m.report) {
     const c = summarize(m.report);
+    const assessed = m.report.flatMap((finding) => (finding.commercialRisk ? [finding.commercialRisk] : []));
+    const highRisk = assessed.filter((risk) => risk.level === "high").length;
+    const mediumRisk = assessed.filter((risk) => risk.level === "medium").length;
     lines.push(
       `Result: ${plural(c.conflict, "conflict", "conflicts")}, ${plural(c.missing, "missing item", "missing items")}, ` +
         `${plural(c.covered, "covered commitment", "covered commitments")}, ${plural(c.needs_review, "item needing review", "items needing review")}.`,
     );
+    if (assessed.length) lines.push(`Feasibility: ${plural(highRisk, "high-risk promise", "high-risk promises")}, ${plural(mediumRisk, "medium-risk promise", "medium-risk promises")}.`);
   } else {
     lines.push(`Status: ${m.runState}`);
   }
@@ -77,7 +81,7 @@ export function manifestBytes(m: ReviewManifest): number {
   return Buffer.byteLength(buildDescription(m), "utf8");
 }
 
-export type IssueMarker = { app: "promiseguard"; v: 1; reviewTaskId: string; findingId: string; requestId: string };
+type IssueMarker = { app: "promiseguard"; v: 1; reviewTaskId: string; findingId: string; requestId: string };
 
 export function issueMarkerLine(marker: Omit<IssueMarker, "app" | "v">): string {
   return `${ISSUE_MARKER} ${JSON.stringify({ app: "promiseguard", v: 1, ...marker })}`;

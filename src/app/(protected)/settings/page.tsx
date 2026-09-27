@@ -1,16 +1,16 @@
 import { ConnectionPanel } from "@/components/settings/connection-panel";
+import { PageHeader } from "@/components/ui/page-header";
 
-export const metadata = { title: "Connection · PromiseGuard" };
+export const metadata = { title: "Connection", description: "Check what the configured Graph8 connection can do." };
 
 export default function SettingsPage() {
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Connection and capabilities</h1>
-        <p className="mt-1 text-sm text-muted">
-          Checks what the configured Graph8 key can do. A passing check is not proof every record is accessible.
-        </p>
-      </div>
+    <div className="space-y-8">
+      <PageHeader
+        eyebrow="Graph8 workspace"
+        title="Connection and capabilities"
+        description="Checks what the configured Graph8 key can do. A passing check is not proof every record is accessible."
+      />
       <ConnectionPanel />
     </div>
   );

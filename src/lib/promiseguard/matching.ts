@@ -6,15 +6,12 @@ import { listQuotesForCompany, listQuotesForDeal, type QuoteRecord } from "@/lib
 
 export type QuoteLinkage = "deal" | "customer_only";
 
-export type QuoteCandidate = {
+type QuoteCandidate = {
   quote: QuoteRecord;
   linkage: QuoteLinkage;
 };
 
-/**
- * Quotes linked to the deal by deal_id, plus same-customer quotes with no deal link (which need
- * explicit confirmation). Quotes linked to a different deal are excluded.
- */
+/** Deal-linked quotes plus same-customer quotes with no deal link (these need confirmation); other deals' quotes are excluded. */
 export async function findQuoteCandidates(deal: Deal): Promise<{ candidates: QuoteCandidate[]; warnings: string[] }> {
   const warnings: string[] = [];
   const byId = new Map<string, QuoteCandidate>();
@@ -37,7 +34,6 @@ export async function findQuoteCandidates(deal: Deal): Promise<{ candidates: Quo
   return { candidates: [...byId.values()], warnings };
 }
 
-/** Re-check on the server that the selected quote belongs to the selected deal. */
 export function assertQuoteEligible(deal: Deal, quote: QuoteRecord, matchConfirmed: boolean): QuoteLinkage {
   if (quote.dealId === deal.id) return "deal";
   if (quote.dealId && quote.dealId !== deal.id) {

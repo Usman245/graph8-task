@@ -2,10 +2,7 @@ import "server-only";
 import { z } from "zod";
 import { graph8, parseResponse, path } from "../client";
 
-// GET /deals/{id}/memory: "Everything the meetings on this deal established: people, pains, commitments, risks."
-// Observed 2026-09-26 (no meetings yet): { data: { deal_id, review_count, average_score, reviews: [] } }.
-// Review items are an open shape in the OpenAPI schema, so commitments are extracted defensively and only
-// from fields whose names say they are commitments. Nothing else in the memory is used as evidence.
+// GET /deals/{id}/memory. Review items are an open shape, so only fields named as commitments are used as evidence.
 
 const MemoryDto = z.object({
   data: z
@@ -17,7 +14,7 @@ const MemoryDto = z.object({
     .passthrough(),
 });
 
-export type MemoryCommitment = {
+type MemoryCommitment = {
   text: string;
   /** "seller" only when Graph8 labels the owner as our side; otherwise unknown. */
   side: "seller" | "buyer" | "unknown";

@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useRef, useState } from "react";
-import { COVERAGE_LABEL, CoverageBadge, SampleBadge } from "@/components/status";
+import { COVERAGE_LABEL, CoverageBadge, RiskBadge, SampleBadge } from "@/components/status";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Drawer } from "@/components/ui/drawer";
@@ -15,7 +15,7 @@ import type { Finding } from "@/lib/promiseguard/schemas";
 
 type Panel = "none" | "confirm" | "dismiss" | "resolve" | "assign" | "complete_issue";
 
-const fieldClass = "w-full rounded-md border border-border bg-surface px-3 py-2 text-sm";
+const fieldClass = "pg-field mt-1.5";
 
 export function FindingDrawer({
   reviewTaskId,
@@ -38,8 +38,12 @@ export function FindingDrawer({
       onClose={onClose}
       title={
         finding && (
-          <span className="flex flex-wrap items-center gap-2">
-            {finding.commitment} <CoverageBadge coverage={finding.coverage} />
+          <span className="block">
+            <span className="flex flex-wrap items-center gap-2">
+              <span className="pg-eyebrow">Finding</span>
+              <CoverageBadge coverage={finding.coverage} />
+            </span>
+            <span className="mt-1.5 block">{finding.commitment}</span>
           </span>
         )
       }
@@ -47,7 +51,7 @@ export function FindingDrawer({
       {finding && (
         <>
           <FindingBody key={finding.id} reviewTaskId={reviewTaskId} view={view} f={finding} onChanged={onChanged} />
-          {BLOCKING_COVERAGE.includes(finding.coverage) && (
+          {(BLOCKING_COVERAGE.includes(finding.coverage) || ["medium", "high"].includes(finding.commercialRisk?.level ?? "")) && (
             <FixPanel key={`fix-${finding.id}`} reviewTaskId={reviewTaskId} view={view} f={finding} onChanged={onChanged} onRecheck={onRecheck} />
           )}
         </>
@@ -110,12 +114,12 @@ function FindingBody({ reviewTaskId, view, f, onChanged }: { reviewTaskId: strin
   return (
     <div className="space-y-6 text-sm">
       <section className="space-y-2">
-        <h3 className="font-semibold">What the seller said</h3>
+        <h3 className="pg-eyebrow">What the seller said</h3>
         {f.salesEvidence.map((c, i) => {
           const d = m.documents[c.documentId];
           return (
-            <figure key={i} className="rounded-md border-l-4 border-primary bg-background p-3">
-              <blockquote className="whitespace-pre-wrap">&ldquo;{c.excerpt}&rdquo;</blockquote>
+            <figure key={i} className="rounded-xl border-l-4 border-primary bg-primary-soft/40 p-4">
+              <blockquote className="whitespace-pre-wrap text-[15px] leading-relaxed">&ldquo;{c.excerpt}&rdquo;</blockquote>
               <figcaption className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted">
                 <span className="font-medium text-foreground">{d?.speaker ?? "Unknown speaker"}</span>
                 <Badge tone={d?.side === "seller" ? "primary" : d?.side === "buyer" ? "neutral" : "review"}>{d?.side ?? "unknown"}</Badge>
@@ -130,17 +134,17 @@ function FindingBody({ reviewTaskId, view, f, onChanged }: { reviewTaskId: strin
       </section>
 
       <section className="space-y-2">
-        <h3 className="font-semibold">What the quotation says</h3>
+        <h3 className="pg-eyebrow">What the quotation says</h3>
         {f.quoteEvidence.length === 0 ? (
-          <p className="rounded-md bg-background p-3 text-muted">
+          <p className="rounded-xl border border-dashed border-border bg-background p-4 text-muted">
             {f.coverage === "missing"
               ? `No supporting clause was found in the supplied quote text (${m.quoteIncludedFields.join(", ") || "no fields"}).`
               : "No quote excerpt was cited."}
           </p>
         ) : (
           f.quoteEvidence.map((c, i) => (
-            <figure key={i} className="rounded-md border-l-4 border-border bg-background p-3">
-              <blockquote className="whitespace-pre-wrap">&ldquo;{c.excerpt}&rdquo;</blockquote>
+            <figure key={i} className="rounded-xl border-l-4 border-foreground/25 bg-background p-4">
+              <blockquote className="whitespace-pre-wrap text-[15px] leading-relaxed">&ldquo;{c.excerpt}&rdquo;</blockquote>
               <figcaption className="mt-2 text-xs text-muted">
                 {m.quoteLabel} · <span className="font-mono">{c.documentId.split(":").slice(2).join(":")}</span>
               </figcaption>
@@ -149,8 +153,8 @@ function FindingBody({ reviewTaskId, view, f, onChanged }: { reviewTaskId: strin
         )}
       </section>
 
-      <section className="space-y-1">
-        <h3 className="font-semibold">Assessment</h3>
+      <section className="space-y-2 rounded-xl border border-border p-4">
+        <h3 className="pg-eyebrow">Assessment</h3>
         <p>{f.reason}</p>
         {f.adjustment && (
           <p className="text-missing">
@@ -172,8 +176,37 @@ function FindingBody({ reviewTaskId, view, f, onChanged }: { reviewTaskId: strin
         </p>
       </section>
 
+      {f.commercialRisk && (
+        <section className="space-y-3 rounded-xl border border-border bg-background p-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="pg-eyebrow">Commercial feasibility</h3>
+            <RiskBadge level={f.commercialRisk.level} />
+            {f.commercialRisk.requiresApproval && <Badge tone="conflict">Approval recommended</Badge>}
+          </div>
+          <p>{f.commercialRisk.reason}</p>
+          {f.commercialRisk.riskTypes.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {f.commercialRisk.riskTypes.map((type) => <Badge key={type}>{type.replaceAll("_", " ")}</Badge>)}
+            </div>
+          )}
+          {f.commercialRisk.missingInformation.length > 0 && (
+            <div>
+              <p className="font-medium">Information to clarify</p>
+              <ul className="list-disc pl-5">{f.commercialRisk.missingInformation.map((item) => <li key={item}>{item}</li>)}</ul>
+            </div>
+          )}
+          {f.commercialRisk.recommendedClause && (
+            <div>
+              <p className="font-medium">Safer measurable wording</p>
+              <blockquote className="mt-1 rounded-lg border-l-4 border-covered bg-covered-soft/60 p-3">{f.commercialRisk.recommendedClause}</blockquote>
+            </div>
+          )}
+          <p className="text-xs text-muted">AI decision support based only on this review’s evidence. It does not calculate actual cost, margin, capacity, or legal liability.</p>
+        </section>
+      )}
+
       <section className="space-y-2">
-        <h3 className="font-semibold">Review history</h3>
+        <h3 className="pg-eyebrow">Review history</h3>
         {decisions.length === 0 && !issue ? (
           <p className="text-muted">No human decision yet. The AI finding above is unchanged by any action below.</p>
         ) : (
@@ -187,8 +220,8 @@ function FindingBody({ reviewTaskId, view, f, onChanged }: { reviewTaskId: strin
           </ul>
         )}
         {issue && (
-          <div className="rounded-md border border-border p-3">
-            <p className="font-medium">{issue.title}</p>
+          <div className="rounded-xl border border-border p-4">
+            <p className="font-semibold">{issue.title}</p>
             <p className="text-xs text-muted">
               Graph8 task {issue.status ?? "unknown"} · {issue.assigneeName ?? (issue.assigneeId ? issue.assigneeId : "Unassigned")} · due{" "}
               {formatDate(issue.dueDate)}
@@ -198,7 +231,8 @@ function FindingBody({ reviewTaskId, view, f, onChanged }: { reviewTaskId: strin
         )}
       </section>
 
-      <section className="space-y-3 border-t border-border pt-4">
+      <section className="space-y-4 rounded-xl bg-background p-4">
+        <p className="pg-eyebrow">Your decision</p>
         <div className="flex flex-wrap gap-2">
           {!issue && (
             <>
@@ -224,7 +258,7 @@ function FindingBody({ reviewTaskId, view, f, onChanged }: { reviewTaskId: strin
 
         {(panel === "confirm" || panel === "dismiss" || panel === "resolve" || panel === "complete_issue") && (
           <form
-            className="space-y-2"
+            className="pg-fade space-y-3 rounded-xl border border-border bg-surface p-4"
             onSubmit={(e) => {
               e.preventDefault();
               if (panel === "confirm") decide("confirmed");
@@ -233,7 +267,7 @@ function FindingBody({ reviewTaskId, view, f, onChanged }: { reviewTaskId: strin
               else setIssueStatus("completed");
             }}
           >
-            <label htmlFor="decision-text" className="block font-medium">
+            <label htmlFor="decision-text" className="pg-label">
               {panel === "confirm" ? "Note (optional)" : panel === "dismiss" ? "Reason for dismissing (required)" : "How was it resolved? (required)"}
             </label>
             <textarea id="decision-text" className={fieldClass} rows={3} value={text} onChange={(e) => setText(e.target.value)} maxLength={1000} />
@@ -250,21 +284,21 @@ function FindingBody({ reviewTaskId, view, f, onChanged }: { reviewTaskId: strin
 
         {panel === "assign" && (
           <form
-            className="grid gap-3"
+            className="pg-fade grid gap-4 rounded-xl border border-border bg-surface p-4"
             onSubmit={(e) => {
               e.preventDefault();
               assign();
             }}
           >
             <div>
-              <label htmlFor="issue-title" className="block font-medium">
+              <label htmlFor="issue-title" className="pg-label">
                 Task title
               </label>
               <input id="issue-title" className={fieldClass} value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} required />
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
               <div>
-                <label htmlFor="issue-assignee" className="block font-medium">
+                <label htmlFor="issue-assignee" className="pg-label">
                   Assignee
                 </label>
                 <select id="issue-assignee" className={fieldClass} value={assignee} onChange={(e) => setAssignee(e.target.value)}>
@@ -277,13 +311,13 @@ function FindingBody({ reviewTaskId, view, f, onChanged }: { reviewTaskId: strin
                 </select>
               </div>
               <div>
-                <label htmlFor="issue-due" className="block font-medium">
+                <label htmlFor="issue-due" className="pg-label">
                   Due date
                 </label>
                 <input id="issue-due" type="date" className={fieldClass} value={due} onChange={(e) => setDue(e.target.value)} />
               </div>
               <div>
-                <label htmlFor="issue-priority" className="block font-medium">
+                <label htmlFor="issue-priority" className="pg-label">
                   Priority
                 </label>
                 <select id="issue-priority" className={fieldClass} value={priority} onChange={(e) => setPriority(Number(e.target.value))}>
@@ -318,7 +352,8 @@ const CONFIRMED_HEADING = "Commitments confirmed in sales conversations";
 
 /** The current terms plus the commitment as a new clause, for the reviewer to edit before saving. */
 function proposedTerms(current: string, f: Finding): string {
-  const line = `- ${f.commitment.trim().replace(/\.$/, "")}${f.conditions.length ? ` (${f.conditions.join("; ")})` : ""}.`;
+  const wording = f.commercialRisk?.recommendedClause.trim() || `${f.commitment.trim().replace(/\.$/, "")}${f.conditions.length ? ` (${f.conditions.join("; ")})` : ""}.`;
+  const line = `- ${wording.replace(/^[-•]\s*/, "")}`;
   const base = current.replace(/\r\n?/g, "\n").trimEnd();
   if (base.includes(CONFIRMED_HEADING)) return `${base}\n${line}`;
   return `${base}${base ? "\n\n" : ""}${CONFIRMED_HEADING}\n${line}`;
@@ -388,9 +423,14 @@ function FixPanel({
   }
 
   return (
-    <section className="mt-6 space-y-3 border-t border-border pt-4 text-sm">
+    <section className="mt-6 space-y-4 rounded-xl border border-primary/20 bg-primary-soft/30 p-4 text-sm">
       <div>
-        <h3 className="font-semibold">Fix it</h3>
+        <h3 className="flex items-center gap-2 text-base font-semibold">
+          <svg aria-hidden viewBox="0 0 16 16" className="h-4 w-4 text-primary" fill="none" stroke="currentColor" strokeWidth="1.7">
+            <path d="m10.5 2.5 3 3-8 8H2.5v-3l8-8Z" strokeLinejoin="round" />
+          </svg>
+          Fix it
+        </h3>
         <p className="text-muted">
           Either put the promise into the quote, or tell the buyer what the quote actually covers. Both are saved in Graph8
           {m.mode === "demo" ? " (on the demo deal and its draft quote)" : ""}.
@@ -398,13 +438,13 @@ function FixPanel({
       </div>
 
       {done === "terms" && (
-        <div className="space-y-2 rounded-md bg-covered-soft p-3 text-covered">
+        <div className="space-y-3 rounded-xl border border-covered/25 bg-covered-soft p-4 text-covered">
           <p>Quote terms updated in Graph8. Run a recheck: the gate clears once a review of the new quote version shows it covered.</p>
           <Button onClick={onRecheck}>Recheck against the updated quote</Button>
         </div>
       )}
       {done === "note" && (
-        <p className="rounded-md bg-covered-soft p-3 text-covered">
+        <p className="rounded-xl border border-covered/25 bg-covered-soft p-4 text-covered">
           Clarification saved as a Graph8 deal note. Send it to the buyer, then record a resolution once they agree.
         </p>
       )}
@@ -420,31 +460,36 @@ function FixPanel({
 
       {panel === "terms" &&
         (quote.isPending ? (
-          <div className="h-24 animate-pulse rounded bg-surface-muted" />
+          <div className="h-24 animate-pulse rounded-xl bg-surface-muted" />
         ) : quote.isError ? (
           <p className="text-conflict">{quote.error.message}</p>
         ) : !quote.data.editable ? (
           <p className="text-conflict">{quote.data.reason}</p>
         ) : (
           <form
-            className="space-y-2"
+            className="pg-fade space-y-3 rounded-xl border border-border bg-surface p-4"
             onSubmit={(e) => {
               e.preventDefault();
               submit({ kind: "quote_terms", termsContent: draftTerms, acknowledgeRecall: ackRecall }, "terms");
             }}
           >
-            <label htmlFor="fix-terms" className="block font-medium">
+            <label htmlFor="fix-terms" className="pg-label">
               Quote terms (saved to the Graph8 quote&apos;s terms)
             </label>
             {f.coverage === "conflict" && f.quoteEvidence[0] && (
-              <p className="rounded bg-conflict-soft p-2 text-conflict">
+              <p className="rounded-lg bg-conflict-soft p-3 text-conflict">
                 Also edit or remove the conflicting clause: &ldquo;{f.quoteEvidence[0].excerpt}&rdquo;
+              </p>
+            )}
+            {f.commercialRisk?.recommendedClause && (
+              <p className="rounded-lg bg-missing-soft p-3 text-missing">
+                Graph8 AI supplied safer wording below. Review it and remove or edit any existing guarantee or ambiguous clause before saving.
               </p>
             )}
             <textarea id="fix-terms" className={fieldClass + " font-mono text-xs"} rows={12} maxLength={20000} value={draftTerms} onChange={(e) => setTerms(e.target.value)} />
             {quote.data.recallsSentQuote && (
-              <label className="flex items-start gap-2 rounded-md border border-conflict/30 bg-conflict-soft p-2 text-conflict">
-                <input type="checkbox" className="mt-0.5" checked={ackRecall} onChange={(e) => setAckRecall(e.target.checked)} />
+              <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-conflict/25 bg-conflict-soft p-3 text-conflict">
+                <input type="checkbox" className="pg-check mt-0.5" checked={ackRecall} onChange={(e) => setAckRecall(e.target.checked)} />
                 <span>This quote was already sent. Saving recalls it to draft and voids the buyer&apos;s signing link.</span>
               </label>
             )}
@@ -457,13 +502,13 @@ function FixPanel({
 
       {panel === "note" && (
         <form
-          className="space-y-2"
+          className="pg-fade space-y-3 rounded-xl border border-border bg-surface p-4"
           onSubmit={(e) => {
             e.preventDefault();
             submit({ kind: "clarification_note", content: note }, "note");
           }}
         >
-          <label htmlFor="fix-note" className="block font-medium">
+          <label htmlFor="fix-note" className="pg-label">
             Clarification for the buyer
           </label>
           <textarea id="fix-note" className={fieldClass} rows={10} maxLength={4000} value={note} onChange={(e) => setNote(e.target.value)} />

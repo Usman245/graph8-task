@@ -3,7 +3,7 @@ import { env } from "@/lib/env";
 import { graph8, path } from "@/lib/graph8/client";
 import { Graph8Error } from "@/lib/graph8/errors";
 
-export type CheckStatus = "ok" | "failed" | "skipped";
+type CheckStatus = "ok" | "failed" | "skipped";
 
 export type CapabilityCheck = {
   id: "config" | "deals" | "quotes" | "inbox" | "meetings" | "models" | "tasks" | "workflow";

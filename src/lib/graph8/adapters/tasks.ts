@@ -61,7 +61,7 @@ function toTask(t: z.infer<typeof TaskDto>): Task {
 
 const One = z.object({ data: TaskDto });
 
-export type TaskCreate = {
+type TaskCreate = {
   title: string;
   description: string;
   entity_type: "deal";
@@ -91,7 +91,7 @@ export async function getTask(taskId: string): Promise<Task> {
   return toTask(parseResponse(One, json, operation).data);
 }
 
-export type TaskPatch = Partial<{
+type TaskPatch = Partial<{
   title: string;
   description: string;
   status: "open" | "completed";
@@ -127,4 +127,11 @@ export async function listSubtasks(parentId: string): Promise<Task[]> {
   const operation = "list issue tasks";
   const json = await graph8.get(path`/tasks/${parentId}/subtasks`, { operation });
   return parseResponse(z.object({ data: z.object({ items: z.array(TaskDto) }) }), json, operation).data.items.map(toTask);
+}
+
+export async function listDeliveryTasks() {
+  const operation = "list delivery tasks";
+  const json = await graph8.get("/tasks", { operation, query: { search: "Delivery:", entity_type: "deal", limit: 200, offset: 0 } });
+  const res = parseResponse(z.object({ data: z.array(TaskDto), pagination: z.object({ has_next: z.boolean() }).nullish() }), json, operation);
+  return { items: res.data.map(toTask), partial: res.pagination?.has_next ?? false };
 }

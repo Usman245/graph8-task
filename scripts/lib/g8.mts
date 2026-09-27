@@ -4,7 +4,7 @@ import nextEnv from "@next/env";
 
 nextEnv.loadEnvConfig(process.cwd());
 
-export const BASE = (process.env.GRAPH8_BASE_URL || "https://be.graph8.com/api/v1").replace(/\/$/, "");
+const BASE = (process.env.GRAPH8_BASE_URL || "https://be.graph8.com/api/v1").replace(/\/$/, "");
 const KEY = process.env.GRAPH8_API_KEY;
 
 export class G8Error extends Error {

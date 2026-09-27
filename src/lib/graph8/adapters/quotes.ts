@@ -2,9 +2,7 @@ import "server-only";
 import { z } from "zod";
 import { graph8, parseResponse, path } from "../client";
 
-// Verified: GET /quotes?deal_id= -> { data: { items, total, page, limit } };
-// GET /companies/{id}/quotes -> same list envelope (unobserved rows, parsed defensively);
-// GET /quotes/{id} -> { data: QuoteDetail } with terms_content, public_notes, line_items[].description.
+// Verified shapes: lists -> { data: { items } }; detail -> { data } with terms_content, public_notes, and line items.
 
 const LineItemDto = z.object({
   id: z.string(),
@@ -148,7 +146,6 @@ export async function getQuote(quoteId: string): Promise<QuoteRecord> {
   return toQuote(parseResponse(z.object({ data: QuoteDto }), json, operation).data);
 }
 
-/** Most recent quotes in the workspace (list rows carry deal_id and terms, not line items). */
 export async function listRecentQuotes(limit = 50): Promise<QuoteRecord[]> {
   const operation = "list quotes";
   const json = await graph8.get("/quotes", { operation, query: { page: 1, limit } });
@@ -162,7 +159,6 @@ export const IN_FLIGHT_QUOTE_STATUSES = ["sent", "viewed"];
 
 const WriteResult = z.object({ data: z.object({ id: z.string().nullish(), status: z.string().nullish() }).passthrough() });
 
-/** PATCH /quotes/{id} with terms_content only. Totals and line items are untouched. */
 export async function updateQuoteTerms(quoteId: string, termsContent: string): Promise<{ status: string | null }> {
   const operation = "update quote terms";
   const json = await graph8.patch(path`/quotes/${quoteId}`, { operation, body: { terms_content: termsContent } });

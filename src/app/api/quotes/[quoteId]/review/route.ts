@@ -5,6 +5,9 @@ import { getDeal } from "@/lib/graph8/adapters/deals";
 import { modeForDeal, runAutoReview } from "@/lib/promiseguard/guard";
 import { currentMode } from "@/lib/promiseguard/mode";
 
+// Allows the background finalize watcher (next/server after()) to finish on serverless hosts.
+export const maxDuration = 60;
+
 // "Review now": automatic source selection for one quote. Retries a failed review; reuses an up-to-date one.
 export const POST = withSession(async (_req, ctx: RouteContext<"/api/quotes/[quoteId]/review">) => {
   const { quoteId } = await ctx.params;

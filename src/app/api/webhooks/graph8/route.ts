@@ -1,13 +1,16 @@
 import { timingSafeEqual } from "node:crypto";
 import { after } from "next/server";
 import { env } from "@/lib/env";
-import { alertIfSentWithGaps, enqueueAutoReview } from "@/lib/promiseguard/guard";
+import { alertIfSentWithGaps, settleThenReview } from "@/lib/promiseguard/guard";
 
 // Public Graph8 webhook receiver (the only route without a session). Authenticated by the secret token in
 // the registered URL. The payload is only a hint: the quote is always re-read from Graph8 before acting,
 // so a forged event can at most trigger a review of a real quote. Responds quickly; work runs afterwards.
 
 const MAX_BYTES = 256_000;
+
+// Background work runs in after(): the quiet-period wait, the review start, and a bounded finalize watcher.
+export const maxDuration = 60;
 
 function tokenMatches(given: string | null, expected: string): boolean {
   if (!given) return false;
@@ -18,7 +21,6 @@ function tokenMatches(given: string | null, expected: string): boolean {
 
 const str = (v: unknown) => (typeof v === "string" && v ? v : null);
 
-/** Event name and quote ID from the known envelope shapes ({event, data:{...}} or flat). */
 function parseEvent(payload: unknown, headerEvent: string | null): { event: string | null; quoteId: string | null } {
   const p = (payload && typeof payload === "object" ? payload : {}) as Record<string, unknown>;
   const data = (p.data && typeof p.data === "object" ? p.data : {}) as Record<string, unknown>;
@@ -52,7 +54,7 @@ export async function POST(req: Request) {
     return Response.json({ ok: true, handled: false });
   }
 
-  if (event === "quote.created" || event === "quote.updated") enqueueAutoReview(quoteId, event);
+  if (event === "quote.created" || event === "quote.updated") after(() => settleThenReview(quoteId, event));
   else if (event === "quote.sent" || event === "quote.resent") after(() => alertIfSentWithGaps(quoteId));
   else return Response.json({ ok: true, handled: false });
 

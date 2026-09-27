@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Drawer } from "@/components/ui/drawer";
 import { formatDate, formatMinor, formatMoney } from "@/components/ui/format";
+import { Notice, PageHeader, StepHeading } from "@/components/ui/page-header";
 import { ApiError, api } from "@/lib/api/client-fetch";
 import type { DealContext, QuoteOption } from "@/lib/promiseguard/context";
 import type { SourceRef } from "@/lib/promiseguard/schemas";
@@ -38,20 +39,39 @@ export function DealWorkspace({ dealId }: { dealId: string }) {
     [ctx, selected],
   );
 
-  if (query.isPending) return <div className="h-64 animate-pulse rounded-lg bg-surface-muted" aria-label="Loading deal" />;
+  if (query.isPending) {
+    return (
+      <div className="space-y-6" aria-label="Loading deal">
+        <div className="h-20 w-2/3 animate-pulse rounded-2xl bg-surface-muted" />
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="h-40 animate-pulse rounded-2xl bg-surface-muted" />
+          <div className="h-40 animate-pulse rounded-2xl bg-surface-muted" />
+        </div>
+      </div>
+    );
+  }
   if (query.isError) {
     return <ErrorPanel message={`Could not load this deal from Graph8. ${query.error.message}`} onRetry={() => query.refetch()} />;
   }
   const c = query.data;
   const isDemo = c.mode === "demo";
 
-  const blockers: string[] = [];
-  if (c.modeMismatch) blockers.push(c.modeMismatch);
-  if (!c.comparisonReady) blockers.push("The Graph8 connection or comparison workflow is unavailable (see Connection).");
-  if (!quote) blockers.push("Select a quotation.");
-  else if (quote.preview.length === 0) blockers.push("The selected quotation has no scope text to compare.");
-  else if (quote.linkage === "customer_only" && !matchConfirmed) blockers.push("Confirm the quotation belongs to this deal.");
-  if (selectedRefs.length === 0) blockers.push("Select at least one source.");
+  // Everything that must be true before "Check promises" is enabled, shown to the user as a checklist.
+  const checklist: Array<{ label: string; done: boolean; href?: string }> = [
+    { label: "Choose a quotation in step 1", done: Boolean(quote), href: "#quotes-h" },
+    ...(quote && quote.preview.length === 0
+      ? [{ label: "Choose a quotation that has scope text to compare", done: false, href: "#quotes-h" }]
+      : []),
+    ...(quote?.linkage === "customer_only"
+      ? [{ label: "Confirm the quotation belongs to this deal", done: matchConfirmed, href: "#quotes-h" }]
+      : []),
+    { label: "Choose at least one conversation in step 2", done: selectedRefs.length > 0, href: "#sources-h" },
+  ];
+  const blockers: string[] = [
+    ...(c.modeMismatch ? [c.modeMismatch] : []),
+    ...(!c.comparisonReady ? ["The Graph8 connection or comparison workflow is unavailable. Open Connection to see which check failed."] : []),
+    ...checklist.filter((i) => !i.done).map((i) => i.label),
+  ];
 
   async function start() {
     if (!quote || blockers.length) return;
@@ -82,43 +102,50 @@ export function DealWorkspace({ dealId }: { dealId: string }) {
     setSelected((s) => (s.includes(k) ? s.filter((x) => x !== k) : s.length >= c.maxSources ? s : [...s, k]));
   }
 
+  const contacts = c.deal.contacts.map((x) => x.name ?? x.email).filter(Boolean).join(", ");
+
   return (
-    <div className="space-y-8 pb-36">
-      <div>
-        <Link href="/deals" className="text-sm text-muted hover:text-foreground">
-          ← Deals
-        </Link>
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <h1 className="text-2xl font-semibold">{c.deal.name}</h1>
-          <ModeBadge mode={c.mode} />
-          {isDemo && <SampleBadge />}
-        </div>
-        <p className="mt-1 text-sm text-muted">
-          {[
-            c.deal.contacts.map((x) => x.name ?? x.email).filter(Boolean).join(", ") || "No contacts",
-            formatMoney(c.deal.amount, c.deal.currency),
-            c.deal.stageName ?? "No stage",
-            c.deal.ownerName ? `Owner: ${c.deal.ownerName}` : null,
-          ]
-            .filter(Boolean)
-            .join(" · ")}
-        </p>
-      </div>
+    <div className="space-y-10 pb-40">
+      <PageHeader
+        back={{ href: "/deals", label: "Deals" }}
+        eyebrow="Check promises against quote"
+        title={c.deal.name}
+        badges={
+          <>
+            <ModeBadge mode={c.mode} />
+            {isDemo && <SampleBadge />}
+          </>
+        }
+        description={
+          <dl className="mt-1 flex flex-wrap gap-x-6 gap-y-2">
+            {[
+              ["Contacts", contacts || "No contacts"],
+              ["Value", formatMoney(c.deal.amount, c.deal.currency)],
+              ["Stage", c.deal.stageName ?? "No stage"],
+              ...(c.deal.ownerName ? [["Owner", c.deal.ownerName]] : []),
+            ].map(([k, v]) => (
+              <div key={k}>
+                <dt className="pg-eyebrow">{k}</dt>
+                <dd className="mt-0.5 font-medium text-foreground">{v}</dd>
+              </div>
+            ))}
+          </dl>
+        }
+      />
 
       {c.modeMismatch && (
-        <div role="alert" className="rounded-lg border border-missing/30 bg-missing-soft p-4 text-sm text-missing">
-          {c.modeMismatch}
+        <div role="alert">
+          <Notice tone="missing">{c.modeMismatch}</Notice>
         </div>
       )}
 
-      <section aria-labelledby="quotes-h" className="space-y-3">
-        <h2 id="quotes-h" className="text-lg font-semibold">
-          1. Choose the quotation
-        </h2>
+      <section aria-labelledby="quotes-h" className="pg-rise space-y-4" style={{ animationDelay: "60ms" }}>
+        <StepHeading n={1} id="quotes-h" title="Choose the quotation" />
+        <p className="text-sm text-muted">Click a quote card to select it. PromiseGuard never picks the quote for you.</p>
         {c.quoteWarnings.map((w) => (
-          <p key={w} className="text-sm text-missing">
+          <Notice key={w} tone="missing">
             {w}
-          </p>
+          </Notice>
         ))}
         {c.quotes.length === 0 ? (
           <EmptyPanel title="No quotations found for this deal.">Create or link a quote to this deal in Graph8, then reload.</EmptyPanel>
@@ -139,8 +166,8 @@ export function DealWorkspace({ dealId }: { dealId: string }) {
           </fieldset>
         )}
         {quote?.linkage === "customer_only" && (
-          <label className="flex items-start gap-2 rounded-md border border-missing/30 bg-missing-soft p-3 text-sm">
-            <input type="checkbox" checked={matchConfirmed} onChange={(e) => setMatchConfirmed(e.target.checked)} className="mt-0.5" />
+          <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-missing/25 bg-missing-soft p-4 text-sm">
+            <input type="checkbox" checked={matchConfirmed} onChange={(e) => setMatchConfirmed(e.target.checked)} className="pg-check mt-0.5" />
             <span>
               This quote is for the same customer but is not linked to this deal in Graph8. I confirm it belongs to this deal. The
               confirmation is saved with the review.
@@ -149,19 +176,19 @@ export function DealWorkspace({ dealId }: { dealId: string }) {
         )}
       </section>
 
-      <section aria-labelledby="sources-h" className="space-y-3">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 id="sources-h" className="text-lg font-semibold">
-            2. Choose the sales conversations
-          </h2>
-          <span className="text-sm text-muted">
-            {selected.length} of {c.maxSources} max selected
-          </span>
-        </div>
+      <section aria-labelledby="sources-h" className="pg-rise space-y-4" style={{ animationDelay: "120ms" }}>
+        <StepHeading
+          n={2}
+          id="sources-h"
+          title="Choose the sales conversations"
+          aside={
+            <span className="rounded-full bg-surface-muted px-3 py-1 text-xs font-medium text-muted">
+              <span className="tabular-nums text-foreground">{selected.length}</span> of {c.maxSources} max selected
+            </span>
+          }
+        />
         {c.sources.errors.map((e) => (
-          <p key={e} className="text-sm text-conflict">
-            {e}
-          </p>
+          <ErrorPanel key={e} message={e} />
         ))}
         {c.sources.candidates.length === 0 && !c.modeMismatch ? (
           isDemo ? (
@@ -176,21 +203,28 @@ export function DealWorkspace({ dealId }: { dealId: string }) {
             {c.sources.candidates.map((s) => {
               const k = keyOf(s.ref);
               const checked = selected.includes(k);
+              const disabled = !s.textAvailable || (!checked && selected.length >= c.maxSources);
               return (
                 <div
                   key={k}
-                  className={`flex flex-wrap items-start justify-between gap-3 rounded-lg border bg-surface p-4 ${checked ? "border-primary" : "border-border"}`}
+                  className={`flex flex-wrap items-start justify-between gap-3 rounded-2xl border bg-surface p-4 transition sm:p-5 ${
+                    checked ? "border-primary bg-primary-soft/30 ring-4 ring-primary-soft" : "border-border hover:border-foreground/15"
+                  } ${disabled && !checked ? "opacity-70" : ""}`}
                 >
-                  <label className="flex flex-1 items-start gap-3">
-                    <input
-                      type="checkbox"
-                      className="mt-1"
-                      checked={checked}
-                      disabled={!s.textAvailable || (!checked && selected.length >= c.maxSources)}
-                      onChange={() => toggle(k)}
-                    />
-                    <span className="space-y-1">
-                      <span className="flex flex-wrap items-center gap-2 font-medium">
+                  <label className={`flex min-w-0 flex-1 items-start gap-4 ${disabled ? "cursor-not-allowed" : "cursor-pointer"}`}>
+                    <input type="checkbox" className="pg-check mt-1" checked={checked} disabled={disabled} onChange={() => toggle(k)} />
+                    <span
+                      aria-hidden
+                      className={`hidden h-10 w-10 flex-none items-center justify-center rounded-xl sm:inline-flex ${
+                        s.synthetic ? "bg-missing-soft text-missing" : "bg-primary-soft text-primary"
+                      }`}
+                    >
+                      <svg viewBox="0 0 16 16" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2v-7Z" strokeLinejoin="round" />
+                      </svg>
+                    </span>
+                    <span className="min-w-0 space-y-1">
+                      <span className="flex flex-wrap items-center gap-2 font-semibold">
                         {s.title}
                         {s.synthetic ? <SampleBadge /> : <Badge tone="primary">{s.originLabel}</Badge>}
                       </span>
@@ -202,7 +236,7 @@ export function DealWorkspace({ dealId }: { dealId: string }) {
                       {s.unavailableReason && <span className="block text-xs text-conflict">{s.unavailableReason}</span>}
                     </span>
                   </label>
-                  <Button variant="secondary" className="px-3 py-1" onClick={() => setPreview(s)} disabled={!s.textAvailable}>
+                  <Button variant="secondary" className="px-3 py-1.5" onClick={() => setPreview(s)} disabled={!s.textAvailable}>
                     Preview
                   </Button>
                 </div>
@@ -219,21 +253,21 @@ export function DealWorkspace({ dealId }: { dealId: string }) {
         )}
       </section>
 
-      <section aria-labelledby="reviews-h" className="space-y-3">
-        <h2 id="reviews-h" className="text-lg font-semibold">
+      <section aria-labelledby="reviews-h" className="pg-rise space-y-4" style={{ animationDelay: "180ms" }}>
+        <h2 id="reviews-h" className="text-lg font-semibold tracking-tight">
           Previous PromiseGuard reviews
         </h2>
         {"error" in c.reviews ? (
           <ErrorPanel message={c.reviews.error} />
         ) : c.reviews.items.length === 0 ? (
-          <p className="text-sm text-muted">No reviews saved in Graph8 for this deal yet.</p>
+          <p className="rounded-xl border border-dashed border-border px-4 py-5 text-center text-sm text-muted">No reviews saved in Graph8 for this deal yet.</p>
         ) : (
-          <ul className="divide-y divide-border rounded-lg border border-border bg-surface">
+          <ul className="pg-card divide-y divide-border overflow-hidden">
             {c.reviews.items.map((r) => (
-              <li key={r.taskId} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm">
+              <li key={r.taskId} className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 text-sm transition hover:bg-background/70">
                 <div className="space-y-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <Link href={`/reviews/${encodeURIComponent(r.taskId)}`} className="font-medium text-primary hover:underline">
+                    <Link href={`/reviews/${encodeURIComponent(r.taskId)}`} className="pg-link">
                       {r.quoteLabel ?? "Review"}
                     </Link>
                     {r.mode && <ModeBadge mode={r.mode} />}
@@ -244,12 +278,12 @@ export function DealWorkspace({ dealId }: { dealId: string }) {
                   </p>
                 </div>
                 {r.counts && (
-                  <div className="flex flex-wrap gap-1">
+                  <div className="flex flex-wrap gap-2">
                     {(["conflict", "missing", "needs_review", "covered"] as const).map((k) =>
                       r.counts![k] ? (
                         <span key={k} className="flex items-center gap-1">
                           <CoverageBadge coverage={k} />
-                          <span className="text-xs">{r.counts![k]}</span>
+                          <span className="text-xs font-semibold tabular-nums">{r.counts![k]}</span>
                         </span>
                       ) : null,
                     )}
@@ -262,26 +296,58 @@ export function DealWorkspace({ dealId }: { dealId: string }) {
         {"partial" in c.reviews && c.reviews.partial && <p className="text-xs text-muted">Showing the 100 most recent deal tasks.</p>}
       </section>
 
-      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface/95 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3">
-          <div className="text-sm">
-            <p>
-              <span className="font-medium">{quote ? quote.label : "No quote selected"}</span>
-              <span className="text-muted"> · {selectedRefs.length} source(s)</span>
-              {isDemo && selectedRefs.length > 0 && <span className="text-missing"> · Sample conversation</span>}
-              {quote && !quote.textComplete && <span className="text-missing"> · Quote text incomplete</span>}
+      <div className="fixed inset-x-0 bottom-0 z-40 px-3 pb-3">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-surface/90 px-5 py-3.5 shadow-[0_16px_48px_-16px_rgba(28,29,31,.35)] backdrop-blur-md">
+          <div className="min-w-0 text-sm">
+            <p className="flex flex-wrap items-center gap-x-2">
+              <span className="font-semibold">{quote ? quote.label : "No quote selected"}</span>
+              <span className="text-muted">· {selectedRefs.length} source(s)</span>
+              {isDemo && selectedRefs.length > 0 && <span className="text-missing">· Sample conversation</span>}
+              {quote && !quote.textComplete && <span className="text-missing">· Quote text incomplete</span>}
             </p>
-            <p className="text-xs text-muted">
-              {blockers[0] ?? "Creates a review task in Graph8 and runs the comparison."}
-            </p>
+            {blockers.length === 0 ? (
+              <p className="mt-0.5 flex items-center gap-1.5 text-xs text-covered">
+                <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-covered" />
+                Ready. Creates a review task in Graph8 and runs the comparison.
+              </p>
+            ) : (
+              <ul aria-label="Before you can check promises" className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                {c.modeMismatch && <li className="text-conflict">✗ {c.modeMismatch}</li>}
+                {!c.comparisonReady && (
+                  <li className="text-conflict">
+                    ✗ Graph8 comparison unavailable.{" "}
+                    <Link href="/settings" className="underline">
+                      Open Connection
+                    </Link>
+                  </li>
+                )}
+                {checklist.map((i) => (
+                  <li key={i.label} className={i.done ? "text-covered" : "font-medium text-missing"}>
+                    {i.done ? "✓" : "○"}{" "}
+                    {i.done || !i.href ? (
+                      i.label
+                    ) : (
+                      <a href={i.href} className="underline underline-offset-2">
+                        {i.label}
+                      </a>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
             {submitError && (
-              <p role="alert" className="text-xs text-conflict">
+              <p role="alert" className="mt-1 text-xs text-conflict">
                 {submitError}
               </p>
             )}
           </div>
-          <Button onClick={start} disabled={blockers.length > 0 || submitting}>
+          <Button onClick={start} disabled={blockers.length > 0 || submitting} className="px-5 py-2.5">
             {submitting ? "Starting…" : "Check promises"}
+            {!submitting && (
+              <svg aria-hidden viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <path d="M3 8h10M9 4l4 4-4 4" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            )}
           </Button>
         </div>
       </div>
@@ -293,16 +359,23 @@ export function DealWorkspace({ dealId }: { dealId: string }) {
 
 function QuoteCard({ q, selected, onSelect }: { q: QuoteOption; selected: boolean; onSelect: () => void }) {
   return (
-    <div className={`rounded-lg border bg-surface p-4 ${selected ? "border-primary ring-1 ring-primary" : "border-border"}`}>
-      <label className="flex items-start gap-3">
-        <input type="radio" name="quote" className="mt-1" checked={selected} onChange={onSelect} />
-        <span className="flex-1 space-y-1">
-          <span className="block font-medium">{q.label}</span>
-          <span className="block text-sm text-muted">
-            {formatMinor(q.totalMinor, q.currency)} · {q.status ?? "unknown status"} · created {formatDate(q.createdAt)}
+    <div
+      className={`rounded-2xl border bg-surface p-5 transition ${
+        selected ? "border-primary bg-primary-soft/30 ring-4 ring-primary-soft" : "border-border hover:border-foreground/15"
+      }`}
+    >
+      <label className="flex cursor-pointer items-start gap-3">
+        <input type="radio" name="quote" className="pg-check mt-1" checked={selected} onChange={onSelect} />
+        <span className="min-w-0 flex-1 space-y-2">
+          <span className="flex items-start justify-between gap-3">
+            <span className="font-semibold leading-snug">{q.label}</span>
+            <span className="whitespace-nowrap text-lg font-semibold tabular-nums tracking-tight">{formatMinor(q.totalMinor, q.currency)}</span>
+          </span>
+          <span className="block text-xs text-muted">
+            <span className="capitalize">{q.status ?? "unknown status"}</span> · created {formatDate(q.createdAt)}
             {q.sentAt ? ` · sent ${formatDate(q.sentAt)}` : ""}
           </span>
-          <span className="flex flex-wrap gap-1">
+          <span className="flex flex-wrap gap-1.5">
             {q.linkage === "deal" ? <Badge tone="covered">Linked to this deal</Badge> : <Badge tone="missing">Same customer, not linked</Badge>}
             {q.preview.length === 0 ? (
               <Badge tone="conflict">Quotation detail is insufficient</Badge>
@@ -320,13 +393,18 @@ function QuoteCard({ q, selected, onSelect }: { q: QuoteOption; selected: boolea
         </span>
       </label>
       {q.preview.length > 0 && (
-        <details className="mt-3 text-sm">
-          <summary className="cursor-pointer text-primary">Preview quote scope</summary>
-          <div className="mt-2 space-y-2">
+        <details className="group mt-4 border-t border-border pt-3 text-sm">
+          <summary className="flex cursor-pointer list-none items-center gap-1.5 font-medium text-primary">
+            <svg aria-hidden viewBox="0 0 16 16" className="h-3.5 w-3.5 transition group-open:rotate-90" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="m6 4 4 4-4 4" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            Preview quote scope
+          </summary>
+          <div className="mt-3 space-y-2">
             {q.preview.map((p) => (
-              <div key={p.path} className="rounded bg-background p-2">
-                <p className="text-xs font-medium text-muted">{p.path}</p>
-                <p className="whitespace-pre-wrap">{p.text}</p>
+              <div key={p.path} className="rounded-lg bg-background p-3">
+                <p className="pg-eyebrow">{p.path}</p>
+                <p className="mt-1 whitespace-pre-wrap">{p.text}</p>
               </div>
             ))}
           </div>
@@ -356,35 +434,55 @@ function SourcePreview({ dealId, source, onClose }: { dealId: string; source: So
       open={Boolean(source)}
       onClose={onClose}
       title={
-        <span className="flex flex-wrap items-center gap-2">
-          {source?.title}
-          {source?.synthetic && <SampleBadge />}
+        <span className="block">
+          <span className="pg-eyebrow block">Conversation preview</span>
+          <span className="mt-1 flex flex-wrap items-center gap-2">
+            {source?.title}
+            {source?.synthetic && <SampleBadge />}
+          </span>
         </span>
       }
     >
       {source?.synthetic && (
-        <p className="mb-4 rounded-md bg-missing-soft p-3 text-sm text-missing">
+        <Notice tone="missing" className="mb-5">
           Sample conversation: synthetic demonstration content from the build plan. It is not a Graph8 email or meeting transcript.
-        </p>
+        </Notice>
       )}
       {query.isPending ? (
-        <div className="h-32 animate-pulse rounded bg-surface-muted" />
+        <div className="space-y-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="h-20 animate-pulse rounded-xl bg-surface-muted" />
+          ))}
+        </div>
       ) : query.isError ? (
         <ErrorPanel message={query.error.message} />
       ) : (
-        <ol className="space-y-3">
-          {query.data.documents.map((d) => (
-            <li key={d.id} className="rounded-md border border-border p-3">
-              <p className="flex flex-wrap items-center gap-2 text-xs text-muted">
-                <span className="font-medium text-foreground">{d.speaker ?? "Unknown speaker"}</span>
-                <Badge tone={d.speakerSide === "seller" ? "primary" : d.speakerSide === "buyer" ? "neutral" : "review"}>
-                  {d.speakerSide === "unknown" ? "Unknown side" : d.speakerSide}
-                </Badge>
-                {formatDate(d.occurredAt, true)}
-              </p>
-              <p className="mt-2 whitespace-pre-wrap text-sm">{d.text}</p>
-            </li>
-          ))}
+        <ol className="space-y-4">
+          {query.data.documents.map((d) => {
+            const seller = d.speakerSide === "seller";
+            return (
+              <li key={d.id} className={`flex gap-3 ${seller ? "" : "flex-row-reverse"}`}>
+                <span
+                  aria-hidden
+                  className={`mt-1 inline-flex h-8 w-8 flex-none items-center justify-center rounded-full text-xs font-semibold ${
+                    seller ? "bg-primary-soft text-primary" : d.speakerSide === "buyer" ? "bg-surface-muted text-muted" : "bg-review-soft text-review"
+                  }`}
+                >
+                  {(d.speaker ?? "?").trim().charAt(0).toUpperCase()}
+                </span>
+                <div className={`min-w-0 max-w-[85%] rounded-2xl border p-3.5 ${seller ? "rounded-tl-sm border-primary/15 bg-primary-soft/40" : "rounded-tr-sm border-border bg-background"}`}>
+                  <p className="flex flex-wrap items-center gap-2 text-xs text-muted">
+                    <span className="font-semibold text-foreground">{d.speaker ?? "Unknown speaker"}</span>
+                    <Badge tone={seller ? "primary" : d.speakerSide === "buyer" ? "neutral" : "review"}>
+                      {d.speakerSide === "unknown" ? "Unknown side" : d.speakerSide}
+                    </Badge>
+                    {formatDate(d.occurredAt, true)}
+                  </p>
+                  <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">{d.text}</p>
+                </div>
+              </li>
+            );
+          })}
         </ol>
       )}
     </Drawer>

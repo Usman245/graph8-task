@@ -21,7 +21,6 @@ import type { EvidenceDocument, Mode, SourceRef } from "./schemas";
 export type SourceCandidate = {
   ref: SourceRef;
   kind: SourceRef["kind"];
-  /** "Sample conversation", "Graph8 email", "Graph8 meeting transcript", "Graph8 deal note", or "Graph8 deal memory". */
   originLabel: string;
   title: string;
   occurredAt: string | null;
@@ -34,7 +33,6 @@ export type SourceCandidate = {
 
 export type CandidateScan = {
   candidates: SourceCandidate[];
-  /** Human-readable description of how far the bounded scan went. */
   coverage: string[];
   errors: string[];
 };
@@ -44,11 +42,11 @@ const EMAIL_PAGE_SIZE = 50;
 const MEETING_PAGE_SIZE = 25;
 const MAX_CONTACTS_SCANNED = 5;
 
-export function contactEmails(deal: Deal): string[] {
+function contactEmails(deal: Deal): string[] {
   return [...new Set(deal.contacts.map((c) => c.email).filter((e): e is string => Boolean(e)))];
 }
 
-export function sideContext(deal: Deal, mode: Mode): SideContext {
+function sideContext(deal: Deal, mode: Mode): SideContext {
   const sellerDomains = [...env().sellerDomains];
   // The sample conversation's seller uses a reserved example domain; it is only honoured for sample evidence.
   if (mode === "demo" && !sellerDomains.includes(SAMPLE_SELLER_DOMAIN)) sellerDomains.push(SAMPLE_SELLER_DOMAIN);

@@ -1,13 +1,9 @@
-// Synthetic demonstration content. The Acme scenario is section 22 of the build plan; the others
-// are original fixtures written to exercise specific comparison behaviours.
-//
-// Sample conversations are NOT Graph8 inbox messages or meetings. They are always labeled
-// "Sample conversation" and their evidence is marked synthetic.
-// Companies, contacts, deals, and draft quotes below are written into Graph8 by
-// `node scripts/setup-promiseguard.mts records`, all prefixed "[PromiseGuard Demo]". Quotes are never sent.
+// Synthetic demo content: Brightside Marketing selling to four local businesses. Sample conversations are not
+// Graph8 emails or meetings and are always labeled; the deals and draft quotes are created in Graph8 by
+// `node scripts/setup-promiseguard.mts records` with the "[PromiseGuard Demo]" prefix.
 
 export const SAMPLE_LABEL = "Sample conversation";
-export const SAMPLE_SELLER_DOMAIN = "agency.example";
+export const SAMPLE_SELLER_DOMAIN = "brightside-marketing.example";
 
 export type SampleMessage = { speakerName: string; speakerEmail: string; text: string };
 
@@ -50,11 +46,11 @@ export type DemoScenario = {
   deal: { name: string; amount: number; currency: "USD" };
   quotes: DemoQuote[];
   sources: SampleSource[];
-  /** What a correct comparison should show; used in docs/demo.md and manual testing. */
   expected: string[];
 };
 
-const SELLER = { speakerName: "Sam Carter", speakerEmail: "sam.carter@agency.example" };
+/** The agency's account manager. Her domain counts as the seller in Demo mode. */
+const SELLER = { speakerName: "Maya Brooks", speakerEmail: `maya.brooks@${SAMPLE_SELLER_DOMAIN}` };
 const NOT_SENT = "[PromiseGuard Demo] Synthetic quote for demonstrating PromiseGuard. Do not send.";
 const terms = (...lines: string[]) => lines.join("\n");
 
@@ -63,304 +59,318 @@ function person(first: string, last: string, domain: string) {
   return { speakerName: `${first} ${last}`, speakerEmail: email };
 }
 
-// --- Acme (build plan section 22) -------------------------------------------------------------
+const BAKERY_DOMAIN = "promiseguard-demo-bloombakery.example";
+const OLIVIA = person("Olivia", "Grant", BAKERY_DOMAIN);
 
-const ACME_DOMAIN = "promiseguard-demo-acme.example";
-const JORDAN = person("Jordan", "Reyes", ACME_DOMAIN);
-
-const acme: DemoScenario = {
-  key: "acme",
-  summary: "The plan's reference case: one conflict, one missing item, one covered commitment.",
-  company: { name: "[PromiseGuard Demo] Acme", domain: ACME_DOMAIN },
-  contact: { first_name: "[PromiseGuard Demo] Jordan", last_name: "Reyes", work_email: JORDAN.speakerEmail, job_title: "Operations Director" },
-  deal: { name: "[PromiseGuard Demo] Acme customer portal", amount: 8000, currency: "USD" },
+const bakery: DemoScenario = {
+  key: "bakery",
+  summary: "The headline example: a TikTok promise the quote leaves out, a missing photographer, and a covered monthly report.",
+  company: { name: "[PromiseGuard Demo] Bloom Bakery", domain: BAKERY_DOMAIN },
+  contact: { first_name: "[PromiseGuard Demo] Olivia", last_name: "Grant", work_email: OLIVIA.speakerEmail, job_title: "Owner" },
+  deal: { name: "[PromiseGuard Demo] Bloom Bakery social media", amount: 4500, currency: "USD" },
   quotes: [
     {
       key: "main",
       linkToDeal: true,
-      title: "[PromiseGuard Demo] Acme customer portal quote",
+      title: "[PromiseGuard Demo] Bloom Bakery social media quote",
       currency: "USD",
       payment_terms: "net_30",
       contract_start_date: "2026-10-05",
-      contract_duration_value: 1,
+      contract_duration_value: 3,
       contract_duration_unit: "months",
       line_items: [
-        { product_name: "Web portal setup", description: "Customer web portal setup and launch.", quantity: 1, unit_amount: 800000, billing_frequency: "one_time" },
+        {
+          product_name: "Social media management (3 months)",
+          description: "Running Bloom Bakery's Instagram and Facebook pages for 3 months.",
+          quantity: 1,
+          unit_amount: 450000,
+          billing_frequency: "one_time",
+        },
       ],
       terms_content: terms(
-        "Scope",
-        "Web portal setup for the Acme customer portal.",
+        "What's included",
+        "12 posts per month on Instagram and Facebook.",
+        "A monthly report showing likes, followers and reach.",
         "",
-        "Delivery",
-        "Delivery: four weeks after receipt of final assets.",
-        "",
-        "Exclusions",
-        "Data migration: excluded.",
-        "Mobile applications: excluded.",
+        "Not included",
+        "TikTok is not included.",
+        "Paid advertising budget is not included.",
       ),
       notes: NOT_SENT,
     },
   ],
   sources: [
     {
-      id: "acme-discovery-call",
+      id: "bakery-intro-call",
       kind: "sample",
       format: "call_transcript",
-      title: "Sample conversation: Acme discovery call",
+      title: "Sample conversation: Bloom Bakery intro call",
       occurredAt: "2026-09-10T15:00:00.000Z",
-      participants: [SELLER.speakerEmail, JORDAN.speakerEmail],
+      participants: [SELLER.speakerEmail, OLIVIA.speakerEmail],
       messages: [
-        { ...JORDAN, text: "Thanks for walking us through the portal. We have a few thousand customer records in our old system." },
-        { ...SELLER, text: "We will migrate your existing customer records as part of the setup." },
-        { ...JORDAN, text: "Could you also build an Android app?" },
-        { ...SELLER, text: "An Android app would need a separate proposal." },
+        { ...OLIVIA, text: "We're a small bakery and nobody on our team has time for social media." },
+        { ...SELLER, text: "We'll run your TikTok as well as your Instagram and Facebook." },
+        { ...OLIVIA, text: "Could you also redesign our logo?" },
+        { ...SELLER, text: "A new logo would be a separate project." },
       ],
     },
     {
-      id: "acme-follow-up-email",
+      id: "bakery-follow-up-email",
       kind: "sample",
       format: "email",
-      title: "Sample conversation: follow-up email after discovery call",
+      title: "Sample conversation: follow-up email after the intro call",
       occurredAt: "2026-09-12T09:30:00.000Z",
-      participants: [SELLER.speakerEmail, JORDAN.speakerEmail],
+      participants: [SELLER.speakerEmail, OLIVIA.speakerEmail],
       messages: [
         {
           ...SELLER,
-          text: "Thanks for the call, Jordan. To confirm what we discussed: Three months of post-launch support are included. Delivery takes four weeks after you supply the final assets.",
+          text: "Thanks for the chat, Olivia. As promised, a professional photographer will visit once a month to photograph your cakes. You'll also get a monthly report showing your likes, followers and reach.",
         },
       ],
     },
   ],
   expected: [
-    "Customer record migration: Conflict (quote excludes data migration).",
-    "Three months of support: Missing (quote has no support term).",
-    "Four-week delivery after final assets: Covered.",
-    "Android app: not a seller promise (buyer request, seller declined).",
+    "Running TikTok: Conflict (the quote says TikTok is not included).",
+    "Monthly photographer visit: Missing (the quote does not mention photography).",
+    "Monthly report on likes, followers and reach: Covered.",
+    "New logo: not a promise (the owner asked, the agency said it is a separate project).",
   ],
 };
 
-// --- Northwind: quote versions, conditional promise, later correction --------------------------
+const CAFE_DOMAIN = "promiseguard-demo-greenleaf.example";
+const DANIEL = person("Daniel", "Kim", CAFE_DOMAIN);
 
-const NW_DOMAIN = "promiseguard-demo-northwind.example";
-const PRIYA = person("Priya", "Shah", NW_DOMAIN);
-
-const northwind: DemoScenario = {
-  key: "northwind",
-  summary: "Two quote versions to choose between, a conditional discount promise, and a later correction.",
-  company: { name: "[PromiseGuard Demo] Northwind Traders", domain: NW_DOMAIN },
-  contact: { first_name: "[PromiseGuard Demo] Priya", last_name: "Shah", work_email: PRIYA.speakerEmail, job_title: "CTO" },
-  deal: { name: "[PromiseGuard Demo] Northwind field service app", amount: 37000, currency: "USD" },
+const cafe: DemoScenario = {
+  key: "cafe",
+  summary: "Two quote versions to choose between, a 'free first month if you sign by' promise, and a later correction.",
+  company: { name: "[PromiseGuard Demo] Green Leaf Café", domain: CAFE_DOMAIN },
+  contact: { first_name: "[PromiseGuard Demo] Daniel", last_name: "Kim", work_email: DANIEL.speakerEmail, job_title: "Owner" },
+  deal: { name: "[PromiseGuard Demo] Green Leaf Café Google search", amount: 3600, currency: "USD" },
   quotes: [
     {
       key: "v1",
       linkToDeal: true,
-      title: "[PromiseGuard Demo] Northwind field service app quote v1",
+      title: "[PromiseGuard Demo] Green Leaf Café Google search quote v1",
       currency: "USD",
       payment_terms: "net_30",
       contract_start_date: "2026-10-12",
-      contract_duration_value: 14,
-      contract_duration_unit: "weeks",
+      contract_duration_value: 6,
+      contract_duration_unit: "months",
       line_items: [
-        { product_name: "iOS field service app", description: "Native iOS app with job lists and photo capture.", quantity: 1, unit_amount: 1800000, billing_frequency: "one_time" },
-        { product_name: "Android field service app", description: "Native Android app with job lists and photo capture.", quantity: 1, unit_amount: 1600000, billing_frequency: "one_time" },
-        { product_name: "Admin dashboard", description: "Web admin dashboard for dispatchers.", quantity: 1, unit_amount: 800000, billing_frequency: "one_time" },
+        {
+          product_name: "Local Google search package (6 months)",
+          description: "Monthly work to help Green Leaf Café show up when people nearby search on Google.",
+          quantity: 1,
+          unit_amount: 360000,
+          billing_frequency: "one_time",
+        },
       ],
-      terms_content: terms("Delivery", "Delivery: 14 weeks from project kickoff.", "", "Exclusions", "App store submission is handled by the client."),
+      terms_content: terms(
+        "What's included",
+        "A monthly check of your search words and nearby competitors.",
+        "",
+        "Not included",
+        "Setting up your Google Business Profile is done by the café.",
+        "",
+        "Results",
+        "Most businesses see better Google rankings within 6 to 9 months.",
+      ),
       notes: NOT_SENT,
     },
     {
       key: "v2",
       linkToDeal: true,
-      title: "[PromiseGuard Demo] Northwind field service app quote v2",
+      title: "[PromiseGuard Demo] Green Leaf Café Google search quote v2",
       currency: "USD",
       payment_terms: "net_30",
       contract_start_date: "2026-10-12",
-      contract_duration_value: 12,
-      contract_duration_unit: "weeks",
+      contract_duration_value: 6,
+      contract_duration_unit: "months",
       line_items: [
         {
-          product_name: "iOS and Android field service apps",
-          description: "Native iOS and Android apps built together, with job lists, photo capture, and offline mode for technicians.",
+          product_name: "Local Google search package (6 months)",
+          description:
+            "Monthly work to help Green Leaf Café show up when people nearby search on Google, including setting up and improving your Google Business Profile.",
           quantity: 1,
-          unit_amount: 3400000,
+          unit_amount: 360000,
           billing_frequency: "one_time",
         },
-        { product_name: "Admin dashboard", description: "Web admin dashboard for dispatchers.", quantity: 1, unit_amount: 300000, billing_frequency: "one_time" },
-        { product_name: "App store submission", description: "App store submission and review support for both platforms.", quantity: 1, unit_amount: 0, billing_frequency: "one_time" },
       ],
       terms_content: terms(
-        "Delivery",
-        "Delivery: 12 weeks from project kickoff.",
+        "What's included",
+        "Setting up and improving your Google Business Profile, so you appear on Google Maps.",
+        "A monthly check of your search words and nearby competitors.",
+        "",
+        "Results",
+        "We cannot guarantee a first-page Google ranking. Most businesses see better rankings within 4 to 6 months.",
         "",
         "Pricing",
-        "All line items are billed at the listed prices, including the admin dashboard. No items are provided free of charge and no signing-date discounts apply.",
+        "The first month is charged at the normal price. No sign-up discounts or free months apply.",
         "",
-        "Exclusions",
-        "Push notifications are not included in this phase.",
-        "Website redesign is out of scope.",
+        "Not included",
+        "Replying to customer reviews is not included.",
+        "Facebook advertising is not included.",
       ),
       notes: NOT_SENT,
     },
   ],
   sources: [
     {
-      id: "northwind-scoping-call",
+      id: "cafe-planning-call",
       kind: "sample",
       format: "call_transcript",
-      title: "Sample conversation: Northwind scoping call",
+      title: "Sample conversation: Green Leaf Café planning call",
       occurredAt: "2026-09-02T14:00:00.000Z",
-      participants: [SELLER.speakerEmail, PRIYA.speakerEmail],
+      participants: [SELLER.speakerEmail, DANIEL.speakerEmail],
       messages: [
-        { ...PRIYA, text: "Our technicians often work in basements with no signal." },
-        { ...SELLER, text: "Offline mode for technicians is included, so they can work without signal." },
-        { ...SELLER, text: "We'll deliver iOS and Android together in 10 weeks." },
-        { ...SELLER, text: "Push notifications are included." },
-        { ...PRIYA, text: "Can you also do our website redesign?" },
-        { ...SELLER, text: "Let me check with the team and come back to you." },
+        { ...DANIEL, text: "When people search for coffee near me, we never show up." },
+        { ...SELLER, text: "We'll get you on the first page of Google for 'coffee near me' within 2 months." },
+        { ...SELLER, text: "We'll set up your Google Business Profile so you show up on Google Maps." },
+        { ...SELLER, text: "We'll reply to all your Google reviews for you." },
+        { ...DANIEL, text: "Can you also run our Facebook ads?" },
+        { ...SELLER, text: "Let me check with the team and get back to you." },
       ],
     },
     {
-      id: "northwind-pricing-email",
+      id: "cafe-pricing-email",
       kind: "sample",
       format: "email",
-      title: "Sample conversation: Northwind pricing follow-up email",
+      title: "Sample conversation: Green Leaf Café pricing email",
       occurredAt: "2026-09-05T10:15:00.000Z",
-      participants: [SELLER.speakerEmail, PRIYA.speakerEmail],
+      participants: [SELLER.speakerEmail, DANIEL.speakerEmail],
+      messages: [{ ...SELLER, text: "Hi Daniel, good news on pricing: if you sign by October 15, your first month is free." }],
+    },
+    {
+      id: "cafe-correction-email",
+      kind: "sample",
+      format: "email",
+      title: "Sample conversation: Green Leaf Café correction email",
+      occurredAt: "2026-09-09T16:40:00.000Z",
+      participants: [SELLER.speakerEmail, DANIEL.speakerEmail],
       messages: [
         {
           ...SELLER,
-          text: "Hi Priya, following up on pricing: if you sign by October 15, we'll include the admin dashboard at no extra cost. We also handle the app store submission for both platforms.",
+          text: "A quick correction to what I said on our call: replying to your Google reviews is not part of this package. We'll show your team how to do it instead.",
         },
       ],
     },
-    {
-      id: "northwind-correction-email",
-      kind: "sample",
-      format: "email",
-      title: "Sample conversation: Northwind correction email",
-      occurredAt: "2026-09-09T16:40:00.000Z",
-      participants: [SELLER.speakerEmail, PRIYA.speakerEmail],
-      messages: [{ ...SELLER, text: "Correction to my earlier note: push notifications will be phase 2, not part of this build. Everything else stands." }],
-    },
   ],
   expected: [
-    "Select v2 (the newer quote) for the main demo; selecting v1 gives different results, showing why the quote must be chosen explicitly.",
-    "Offline mode: Covered by v2 (not mentioned in v1).",
-    "iOS and Android in 10 weeks: Conflict (v2 says 12 weeks).",
-    "Free admin dashboard if signed by October 15: Conflict (v2 bills the dashboard and rules out signing-date discounts); the condition is preserved.",
-    "App store submission handled by the seller: Covered by v2 (v1 says the client handles it).",
-    "Push notifications: withdrawn by the later correction email, and v2 excludes them. The model may still list it; a reviewer can dismiss it citing the correction.",
-    "Website redesign: not a promise (seller only said they would check).",
+    "Select v2 (the newer quote) for the main demo; selecting v1 gives different results, showing why the quote must be chosen on purpose.",
+    "First page of Google within 2 months: Conflict (v2 says rankings cannot be guaranteed and usually take 4 to 6 months).",
+    "Google Business Profile set-up: Covered by v2 (v1 says the café does it).",
+    "Free first month if signed by October 15: Conflict (v2 says no free months); the condition is kept.",
+    "Replying to reviews: withdrawn by the later correction email, and v2 excludes it. The model may still list it; a reviewer can dismiss it, citing the correction.",
+    "Facebook ads: not a promise (the agency only said it would check).",
   ],
 };
 
-// --- Globex: SLA and price conflicts, unknown speaker, unlinked quote ---------------------------
+const GYM_DOMAIN = "promiseguard-demo-summitfitness.example";
+const RACHEL = person("Rachel", "Adams", GYM_DOMAIN);
+const FREELANCER = { speakerName: "Leo Martin", speakerEmail: "leo.martin@freelance-video.example" };
 
-const GX_DOMAIN = "promiseguard-demo-globex.example";
-const MARCUS = person("Marcus", "Webb", GX_DOMAIN);
-const PARTNER = { speakerName: "Dana Lee", speakerEmail: "dana.lee@implementation-partner.example" };
-
-const globex: DemoScenario = {
-  key: "globex",
-  summary: "Service-level and price conflicts, a statement from an unidentified third party, and a quote that needs deal confirmation.",
-  company: { name: "[PromiseGuard Demo] Globex", domain: GX_DOMAIN },
-  contact: { first_name: "[PromiseGuard Demo] Marcus", last_name: "Webb", work_email: MARCUS.speakerEmail, job_title: "VP Operations" },
-  deal: { name: "[PromiseGuard Demo] Globex managed analytics", amount: 60000, currency: "USD" },
+const gym: DemoScenario = {
+  key: "gym",
+  summary: "A sign-up guarantee and a price freeze the quote contradicts, a freelancer's promise to check, and a trial quote that needs confirming.",
+  company: { name: "[PromiseGuard Demo] Summit Fitness", domain: GYM_DOMAIN },
+  contact: { first_name: "[PromiseGuard Demo] Rachel", last_name: "Adams", work_email: RACHEL.speakerEmail, job_title: "Gym Owner" },
+  deal: { name: "[PromiseGuard Demo] Summit Fitness online ads", amount: 9000, currency: "USD" },
   quotes: [
     {
       key: "main",
       linkToDeal: true,
-      title: "[PromiseGuard Demo] Globex managed analytics quote",
+      title: "[PromiseGuard Demo] Summit Fitness online ads quote",
       currency: "USD",
       payment_terms: "net_30",
       contract_start_date: "2026-11-01",
       contract_duration_value: 12,
       contract_duration_unit: "months",
       line_items: [
-        { product_name: "Analytics platform setup", description: "Platform setup and data connectors for up to 5 sources.", quantity: 1, unit_amount: 2000000, billing_frequency: "one_time" },
-        { product_name: "Managed analytics service", description: "Managed platform operation and monitoring.", quantity: 1, unit_amount: 3600000, billing_frequency: "year" },
-        { product_name: "Onboarding training", description: "Onboarding training for up to 20 users.", quantity: 1, unit_amount: 400000, billing_frequency: "one_time" },
+        { product_name: "Ad campaign set-up", description: "Setting up Facebook and Instagram ad campaigns.", quantity: 1, unit_amount: 150000, billing_frequency: "one_time" },
+        { product_name: "Monthly ad management", description: "Running and improving your ads every month.", quantity: 1, unit_amount: 62500, billing_frequency: "month" },
       ],
       terms_content: terms(
-        "Service levels",
-        "Target availability: 99.5% monthly. No service credits apply.",
+        "What's included",
+        "3 new ad designs every month.",
+        "A monthly results report sent by email.",
+        "",
+        "Results",
+        "We aim to bring in more new members, but no number of sign-ups is guaranteed.",
         "",
         "Pricing",
-        "Pricing is valid for 12 months and is subject to annual review.",
+        "The monthly fee is fixed for 12 months, then reviewed.",
         "",
-        "Reporting",
-        "Monthly service report delivered by email.",
+        "Not included",
+        "Ad spend (the money paid to Facebook and Instagram) is billed separately.",
       ),
       notes: NOT_SENT,
     },
     {
-      key: "pilot",
+      key: "trial",
       linkToDeal: false,
-      title: "[PromiseGuard Demo] Globex pilot quote (not linked to a deal)",
+      title: "[PromiseGuard Demo] Summit Fitness one-month trial (not linked to a deal)",
       currency: "USD",
       payment_terms: "net_30",
       contract_start_date: "2026-10-01",
       contract_duration_value: 1,
       contract_duration_unit: "months",
       line_items: [
-        { product_name: "Analytics pilot", description: "One-month pilot with a single data connector.", quantity: 1, unit_amount: 500000, billing_frequency: "one_time" },
+        { product_name: "One-month ads trial", description: "One ad campaign on Facebook for one month.", quantity: 1, unit_amount: 50000, billing_frequency: "one_time" },
       ],
-      terms_content: terms("Scope", "One-month pilot with a single data connector.", "", "Service levels", "No availability commitment during the pilot."),
+      terms_content: terms("What's included", "One ad campaign on Facebook for one month.", "", "Results", "No results are guaranteed during the trial."),
       notes: NOT_SENT,
     },
   ],
   sources: [
     {
-      id: "globex-solution-call",
+      id: "gym-strategy-call",
       kind: "sample",
       format: "call_transcript",
-      title: "Sample conversation: Globex solution call",
+      title: "Sample conversation: Summit Fitness strategy call",
       occurredAt: "2026-09-15T17:00:00.000Z",
-      participants: [SELLER.speakerEmail, MARCUS.speakerEmail, PARTNER.speakerEmail],
+      participants: [SELLER.speakerEmail, RACHEL.speakerEmail, FREELANCER.speakerEmail],
       messages: [
-        { ...MARCUS, text: "Uptime is critical for our dispatch team." },
-        { ...SELLER, text: "We guarantee 99.9% uptime." },
-        { ...SELLER, text: "Training for up to 20 users is included." },
-        { ...PARTNER, text: "We'll also migrate your historical dashboards from the old tool." },
-        { ...SELLER, text: "Your price is locked for 24 months." },
+        { ...RACHEL, text: "January is our busiest month and we need more members." },
+        { ...SELLER, text: "We guarantee at least 50 new member sign-ups every month." },
+        { ...SELLER, text: "You'll get 3 new ad designs every month." },
+        { ...FREELANCER, text: "I'll also film a promo video at your gym for the ads." },
+        { ...SELLER, text: "Your monthly fee stays the same for 2 years." },
       ],
     },
     {
-      id: "globex-reporting-email",
+      id: "gym-updates-email",
       kind: "sample",
       format: "email",
-      title: "Sample conversation: Globex reporting email",
+      title: "Sample conversation: Summit Fitness weekly updates email",
       occurredAt: "2026-09-18T08:45:00.000Z",
-      participants: [SELLER.speakerEmail, MARCUS.speakerEmail],
-      messages: [{ ...SELLER, text: "Marcus, as promised we'll run weekly reporting calls with your team for the first 3 months." }],
+      participants: [SELLER.speakerEmail, RACHEL.speakerEmail],
+      messages: [{ ...SELLER, text: "Rachel, as promised, we'll send you a quick update every week on how your ads are doing." }],
     },
   ],
   expected: [
-    "99.9% uptime guarantee: Conflict (quote targets 99.5% with no service credits).",
-    "Training for 20 users: Covered.",
-    "Historical dashboard migration: Needs review (said by a third party whose side is unknown).",
-    "Price locked for 24 months: Conflict (quote pricing valid for 12 months).",
-    "Weekly reporting calls for 3 months: Missing or Conflict (quote has only a monthly report).",
-    "The pilot quote is the same customer but not linked to the deal: selecting it requires explicit confirmation.",
+    "50 new sign-ups a month guaranteed: Conflict (the quote says no number of sign-ups is guaranteed).",
+    "3 new ad designs a month: Covered.",
+    "Promo video at the gym: Needs review (said by a freelance videographer, not the agency).",
+    "Same monthly fee for 2 years: Conflict (the quote fixes the fee for 12 months).",
+    "Weekly updates: Missing or Conflict (the quote only includes a monthly report).",
+    "The one-month trial quote is for the same gym but not linked to the deal: choosing it asks you to confirm it belongs to this deal.",
   ],
 };
 
-// --- Lakeside: mostly covered, one hosting conflict --------------------------------------------
+const DENTAL_DOMAIN = "promiseguard-demo-riveradental.example";
+const SOFIA = person("Sofia", "Rivera", DENTAL_DOMAIN);
 
-const LK_DOMAIN = "promiseguard-demo-lakeside.example";
-const ELENA = person("Elena", "Park", LK_DOMAIN);
-
-const lakeside: DemoScenario = {
-  key: "lakeside",
-  summary: "A mostly well-covered quote with one hosting conflict and a declined buyer request.",
-  company: { name: "[PromiseGuard Demo] Lakeside Dental Group", domain: LK_DOMAIN },
-  contact: { first_name: "[PromiseGuard Demo] Elena", last_name: "Park", work_email: ELENA.speakerEmail, job_title: "Practice Manager" },
-  deal: { name: "[PromiseGuard Demo] Lakeside website redesign", amount: 15000, currency: "USD" },
+const dental: DemoScenario = {
+  key: "dental",
+  summary: "A mostly well-covered website quote with one free-hosting conflict and a request the agency turned down.",
+  company: { name: "[PromiseGuard Demo] Rivera Family Dental", domain: DENTAL_DOMAIN },
+  contact: { first_name: "[PromiseGuard Demo] Sofia", last_name: "Rivera", work_email: SOFIA.speakerEmail, job_title: "Practice Manager" },
+  deal: { name: "[PromiseGuard Demo] Rivera Family Dental new website", amount: 5000, currency: "USD" },
   quotes: [
     {
       key: "main",
       linkToDeal: true,
-      title: "[PromiseGuard Demo] Lakeside website redesign quote",
+      title: "[PromiseGuard Demo] Rivera Family Dental website quote",
       currency: "USD",
       payment_terms: "net_30",
       contract_start_date: "2026-10-19",
@@ -368,45 +378,52 @@ const lakeside: DemoScenario = {
       contract_duration_unit: "weeks",
       line_items: [
         {
-          product_name: "Website design and build",
-          description: "Design and build of 5 page templates with up to two revision rounds per template.",
+          product_name: "New website",
+          description: "Design and build of a 5-page website, with up to two rounds of changes on each page.",
           quantity: 1,
-          unit_amount: 1200000,
+          unit_amount: 400000,
           billing_frequency: "one_time",
         },
-        { product_name: "SEO redirect mapping", description: "301 redirect mapping for up to 200 existing URLs.", quantity: 1, unit_amount: 300000, billing_frequency: "one_time" },
+        { product_name: "Online booking button", description: "A 'Book an appointment' button on every page.", quantity: 1, unit_amount: 100000, billing_frequency: "one_time" },
       ],
-      terms_content: terms("Hosting", "Hosting is not included; the client provides hosting.", "", "Delivery", "Launch within 6 weeks of content approval."),
+      terms_content: terms(
+        "Hosting",
+        "Website hosting is not included. The practice pays for its own hosting.",
+        "",
+        "Timeline",
+        "The website goes live within 6 weeks after the practice sends all photos and text.",
+      ),
       notes: NOT_SENT,
     },
   ],
   sources: [
     {
-      id: "lakeside-recap-thread",
+      id: "dental-recap-thread",
       kind: "sample",
       format: "email",
-      title: "Sample conversation: Lakeside recap email thread",
+      title: "Sample conversation: Rivera Family Dental recap email thread",
       occurredAt: "2026-09-20T11:00:00.000Z",
-      participants: [SELLER.speakerEmail, ELENA.speakerEmail],
+      participants: [SELLER.speakerEmail, SOFIA.speakerEmail],
       messages: [
         {
           ...SELLER,
-          text: "Elena, quick recap: the site includes 5 page templates, with two rounds of revisions on each. We'll handle the SEO redirects from your old URLs. And we'll host the new site free for the first year.",
+          text: "Hi Sofia, quick recap: your new website will have 5 pages, and you get two rounds of changes on each page. We'll add a 'Book an appointment' button to every page. And we'll host the website for free for the first year.",
         },
-        { ...ELENA, text: "Great. Could you also write the page copy?" },
-        { ...SELLER, text: "Copywriting isn't something we offer, but we can recommend a writer." },
+        { ...SOFIA, text: "Great. Could you also write the text for each page?" },
+        { ...SELLER, text: "We don't write website text, but we can recommend a writer." },
       ],
     },
   ],
   expected: [
-    "5 page templates: Covered.",
-    "Two revision rounds per template: Covered.",
-    "SEO redirects: Covered.",
-    "Free hosting for the first year: Conflict (quote says hosting is not included).",
-    "Copywriting: not a promise (buyer request, seller declined).",
+    "5-page website: Covered.",
+    "Two rounds of changes on each page: Covered.",
+    "'Book an appointment' button on every page: Covered.",
+    "Free hosting for the first year: Conflict (the quote says hosting is not included).",
+    "Writing the page text: not a promise (the practice asked, the agency said no).",
   ],
 };
 
-export const DEMO_SCENARIOS: DemoScenario[] = [acme, northwind, globex, lakeside];
+/** The first scenario is the headline example linked from the Deals page. */
+export const DEMO_SCENARIOS: DemoScenario[] = [bakery, cafe, gym, dental];
 
 export const SAMPLE_SOURCES: SampleSource[] = DEMO_SCENARIOS.flatMap((s) => s.sources);

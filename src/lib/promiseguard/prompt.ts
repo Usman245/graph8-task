@@ -2,12 +2,11 @@
 // Plain module (no aliases, no server-only) so setup scripts can import it directly.
 // The template uses Graph8 single-brace variables; it must contain no other braces.
 
-export const PROMPT_VERSION = "pg-v3" as const;
+export const PROMPT_VERSION = "pg-v4" as const;
 /** Graph8 skills default to max_tokens 1000 (verified), which truncates larger reports. */
 export const MAX_OUTPUT_TOKENS = 4000;
 export const SKILL_NAME = "PromiseGuard Compare v1";
 export const WORKFLOW_NAME = "PromiseGuard Compare Workflow v1";
-export const DEMO_PREFIX = "[PromiseGuard Demo]";
 
 export const PROMPT_VARIABLES = ["context_json", "sources_json", "quote_json", "output_schema_json"] as const;
 
@@ -37,9 +36,19 @@ Include exact sales excerpts copied character for character from the document te
 For covered and conflict, also include exact quote excerpts copied character for character from the part text, with their part_id.
 For missing, do not invent an excerpt proving absence; leave quote_evidence empty.
 If the quote is marked text_complete false, never use missing; use needs_review instead.
-Do not estimate cost, money saved, legal liability, or delivery capability.
 Put every dependency, prerequisite, or deadline attached to a commitment in the conditions list, for example "after the client supplies final assets" or "only if signed by October 15".
 If a later statement corrects or withdraws an earlier promise, report only the latest position and mention the correction in the reason.
+
+For every commitment, also assess commercial feasibility using only the supplied evidence and quotation:
+- low: the obligation is bounded and its metric, timing, dependencies, and commercial treatment are reasonably clear;
+- medium: ambiguity or a dependency could cause delivery or margin trouble;
+- high: the seller made a guarantee, used an undefined success metric, accepted unbounded scope, omitted material pricing, or made a risky deadline;
+- unknown: the supplied evidence is insufficient to judge.
+Use risk type guarantee for promised outcomes stated as guaranteed or certain.
+Use undefined_metric when success words such as qualified, successful, premium, fast, or unlimited are not defined.
+Use unbounded_scope for unlimited or open-ended work. Use dependency for buyer or third-party prerequisites. Use pricing when promised work has no clear commercial treatment. Use timeline for risky or unclear deadlines.
+Do not invent capacity, internal costs, profit margin, historical performance, or legal conclusions. Missing facts belong in missing_information.
+requires_approval must be true only for high risk. For medium or high risk, propose a concise measurable clause that preserves the business intent without inventing facts. Otherwise recommended_clause may be empty.
 Produce at most max_findings findings, as stated in the context.
 Return truncated=true if additional material findings could not be included.
 No HTML, Markdown fences, or commentary outside the JSON. Write compact JSON without indentation or line breaks. Keep each reason under 40 words.
@@ -68,7 +77,7 @@ export const MODEL_OUTPUT_SCHEMA = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["commitment", "category", "coverage", "reason", "conditions", "sales_evidence", "quote_evidence", "suggested_action"],
+        required: ["commitment", "category", "coverage", "reason", "conditions", "sales_evidence", "quote_evidence", "suggested_action", "commercial_risk"],
         properties: {
           commitment: { type: "string", description: "Short restatement of the seller commitment" },
           category: { enum: ["scope", "timeline", "support", "price", "other"] },
@@ -93,6 +102,22 @@ export const MODEL_OUTPUT_SCHEMA = {
             },
           },
           suggested_action: { type: "string" },
+          commercial_risk: {
+            type: "object",
+            additionalProperties: false,
+            required: ["level", "risk_types", "reason", "missing_information", "recommended_clause", "requires_approval"],
+            properties: {
+              level: { enum: ["low", "medium", "high", "unknown"] },
+              risk_types: {
+                type: "array",
+                items: { enum: ["guarantee", "undefined_metric", "unbounded_scope", "dependency", "timeline", "pricing", "other"] },
+              },
+              reason: { type: "string", description: "Grounded commercial or delivery-risk explanation under 35 words" },
+              missing_information: { type: "array", items: { type: "string" } },
+              recommended_clause: { type: "string", description: "Safer measurable quote wording, or an empty string" },
+              requires_approval: { type: "boolean" },
+            },
+          },
         },
       },
     },

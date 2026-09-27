@@ -9,7 +9,7 @@ import { readFileSync } from "node:fs";
 import { G8Error, describeError, g8 } from "./lib/g8.mts";
 
 const setup = JSON.parse(readFileSync("graph8/promiseguard-setup.json", "utf8"));
-const state = { dealId: setup.scenarios.acme.dealId as string, ownerUserId: setup.ownerUserId as string };
+const state = { dealId: setup.scenarios.bakery.dealId as string, ownerUserId: setup.ownerUserId as string };
 const marker = `pgcheck-${randomUUID().slice(0, 8)}`;
 
 function manifestBlock(bytes: number): string {

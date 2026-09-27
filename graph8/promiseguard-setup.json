@@ -1,43 +1,43 @@
 {
-  "updatedAt": "2026-09-26T15:29:21.903Z",
+  "updatedAt": "2026-09-27T07:32:51.851Z",
   "ownerUserId": "8d63f41f-d5f8-446d-8c99-b70c0318b2dd",
   "skillId": "0d7b0d2d-eaff-45cd-a5e8-865496833630",
   "modelId": "gpt-4o",
   "workflowId": "bd407a17-f542-46d8-8340-a5c7d76a37b7",
   "scenarios": {
-    "acme": {
-      "companyId": 1,
-      "contactId": 1,
-      "dealId": "33fdb517-bcf3-4a81-bc60-1fc881e7c9a8",
+    "bakery": {
       "quotes": {
-        "main": "ace50826-e30e-400f-85a6-7279e9b39004"
-      }
-    },
-    "northwind": {
-      "quotes": {
-        "v1": "5af82b2d-5c50-4e47-924b-e36c0ca5fb60",
-        "v2": "094d8c53-3d0d-43d4-b204-23d9040bc22e"
+        "main": "7a01f53d-6521-4c2c-b8a1-e7d4d2373e06"
       },
-      "companyId": 2,
-      "contactId": 2,
-      "dealId": "6a03af33-bb9a-4e71-89ad-b71cf0e4db72"
+      "companyId": 5,
+      "contactId": 5,
+      "dealId": "4a1445f4-2dec-40fc-a2b3-82d142448f79"
     },
-    "globex": {
+    "cafe": {
       "quotes": {
-        "main": "ce92a770-6b34-4c7f-b25a-19a8cc51075d",
-        "pilot": "320e9389-f348-485b-9730-c47818d064b9"
+        "v1": "67f33e45-236a-4ab3-b253-b58e49a8295f",
+        "v2": "6381bc5b-f4aa-4710-b955-52b26cbcbabe"
       },
-      "companyId": 3,
-      "contactId": 3,
-      "dealId": "e606f070-a149-45fa-b5b4-6a1d3ebb99fa"
+      "companyId": 6,
+      "contactId": 6,
+      "dealId": "2310d713-fcd6-436d-8e5c-d873f34cbff6"
     },
-    "lakeside": {
+    "gym": {
       "quotes": {
-        "main": "41051a07-b44a-43a9-be47-c8543b74354d"
+        "main": "6611ef90-7256-4c8e-8e40-7eae84f18fab",
+        "trial": "8c67cee0-adc8-4281-aeee-a3189bf1ac57"
       },
-      "companyId": 4,
-      "contactId": 4,
-      "dealId": "35ecdab6-07fa-4a2c-ae78-61b6978422b0"
+      "companyId": 7,
+      "contactId": 7,
+      "dealId": "9eefaf19-c81d-44a1-b0c3-12391cce62a6"
+    },
+    "dental": {
+      "quotes": {
+        "main": "2abd29b6-ac14-402f-94ec-34fb0dbb88eb"
+      },
+      "companyId": 8,
+      "contactId": 8,
+      "dealId": "f14b46e8-7d35-4b04-b04f-0923ab9227da"
     }
   }
 }

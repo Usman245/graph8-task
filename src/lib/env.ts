@@ -31,7 +31,7 @@ const EnvSchema = z.object({
   PROMISEGUARD_MAX_REPORT_BYTES: intFromEnv(24000),
 });
 
-export type AppEnv = z.infer<typeof EnvSchema> & {
+type AppEnv = z.infer<typeof EnvSchema> & {
   sellerDomains: string[];
   assignees: Array<{ id: string; name: string }>;
 };

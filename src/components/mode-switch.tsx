@@ -30,7 +30,7 @@ export function ModeSwitch({ mode, demoEnabled }: { mode: Mode; demoEnabled: boo
   }
 
   return (
-    <div role="radiogroup" aria-label="Data mode" className="flex rounded-md border border-border bg-surface-muted p-0.5 text-sm">
+    <div role="radiogroup" aria-label="Data mode" className="flex rounded-xl border border-border bg-surface-muted p-1 text-sm">
       {OPTIONS.map((o) => {
         const active = o.value === mode;
         const disabled = pending || (o.value === "demo" && !demoEnabled);
@@ -43,14 +43,18 @@ export function ModeSwitch({ mode, demoEnabled }: { mode: Mode; demoEnabled: boo
             title={o.hint}
             disabled={disabled}
             onClick={() => select(o.value)}
-            className={`rounded px-3 py-1 font-medium transition-colors disabled:cursor-not-allowed ${
+            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1 font-medium transition disabled:cursor-not-allowed ${
               active
                 ? o.value === "demo"
-                  ? "bg-missing text-white"
-                  : "bg-primary text-white"
+                  ? "bg-surface text-missing shadow-sm"
+                  : "bg-surface text-primary shadow-sm"
                 : "text-muted hover:text-foreground"
             }`}
           >
+            <span
+              aria-hidden
+              className={`h-1.5 w-1.5 rounded-full ${active ? (o.value === "demo" ? "bg-missing" : "bg-primary") : "bg-muted/40"}`}
+            />
             {o.label} mode
           </button>
         );

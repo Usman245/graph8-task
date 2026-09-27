@@ -3,13 +3,14 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
-import { CoverageBadge, ErrorPanel, GateBadge } from "@/components/status";
+import { CoverageBadge, ErrorPanel, GateBadge, RiskBadge } from "@/components/status";
 import { Button } from "@/components/ui/button";
 import { Drawer } from "@/components/ui/drawer";
+import { Notice } from "@/components/ui/page-header";
 import { ApiError, api } from "@/lib/api/client-fetch";
 import type { QuoteGateDetail, SendResult } from "@/lib/promiseguard/guard";
 
-const fieldClass = "w-full rounded-md border border-border bg-surface px-3 py-2 text-sm";
+const fieldClass = "pg-field mt-1.5";
 
 export const gateKey = (quoteId: string) => ["gate", quoteId];
 
@@ -62,23 +63,34 @@ export function SendDialog({ quoteId, open, onClose }: { quoteId: string; open: 
   const canSend = Boolean(d) && d!.gate.state !== "closed" && (clear || (showOverride && override.trim().length >= 10)) && (isDemo || acknowledged);
 
   return (
-    <Drawer open={open} onClose={close} title={<span>Send quote{d ? `: ${d.quoteLabel}` : ""}</span>}>
+    <Drawer
+      open={open}
+      onClose={close}
+      title={
+        <span className="block">
+          <span className="pg-eyebrow block">Send quote</span>
+          <span className="mt-1 block">{d ? d.quoteLabel : "Loading…"}</span>
+        </span>
+      }
+    >
       {gate.isPending ? (
-        <div className="h-32 animate-pulse rounded bg-surface-muted" />
+        <div className="space-y-3">
+          <div className="h-28 animate-pulse rounded-xl bg-surface-muted" />
+          <div className="h-20 animate-pulse rounded-xl bg-surface-muted" />
+        </div>
       ) : gate.isError ? (
         <ErrorPanel message={gate.error.message} onRetry={() => gate.refetch()} />
       ) : result ? (
-        <div className="space-y-3 text-sm">
+        <div className="space-y-4 text-sm">
           {result.sent ? (
-            <p className="rounded-md bg-covered-soft p-3 text-covered">
+            <Notice tone="covered" title="Quote sent">
               Sent through Graph8 e-signature{result.status ? ` (quote status: ${result.status})` : ""}.
-            </p>
+            </Notice>
           ) : (
-            <div className="rounded-md bg-missing-soft p-3 text-missing">
-              <p className="font-medium">Demo mode: Graph8 rendered the send preview. Nothing was sent.</p>
-              {result.preview?.subject && <p className="mt-1">Subject: {result.preview.subject}</p>}
+            <Notice tone="missing" title="Demo mode: Graph8 rendered the send preview. Nothing was sent.">
+              {result.preview?.subject && <p>Subject: {result.preview.subject}</p>}
               {result.preview?.recipient && <p>Would go to: {result.preview.recipient}</p>}
-            </div>
+            </Notice>
           )}
           {result.overrideNoteId && <p className="text-muted">The override and its reason were saved as a Graph8 deal note.</p>}
           <Button variant="secondary" onClick={close}>
@@ -86,10 +98,14 @@ export function SendDialog({ quoteId, open, onClose }: { quoteId: string; open: 
           </Button>
         </div>
       ) : (
-        <div className="space-y-5 text-sm">
-          <section className="space-y-2 rounded-lg border border-border p-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="font-medium">Quote Guard</span>
+        <div className="space-y-6 text-sm">
+          <section
+            className={`space-y-3 rounded-xl border p-4 ${
+              clear ? "border-covered/25 bg-covered-soft/50" : d!.gate.state === "at_risk" ? "border-conflict/25 bg-conflict-soft/50" : "border-border bg-background"
+            }`}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="pg-eyebrow">Quote Guard</span>
               <GateBadge state={d!.gate.state} />
             </div>
             {d!.gate.reasons.map((r) => (
@@ -98,44 +114,52 @@ export function SendDialog({ quoteId, open, onClose }: { quoteId: string; open: 
               </p>
             ))}
             {d!.openItems.length > 0 && (
-              <ul className="space-y-1">
+              <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-surface">
                 {d!.openItems.map((i) => (
-                  <li key={i.findingId} className="flex flex-wrap items-center gap-2">
+                  <li key={i.findingId} className="flex flex-wrap items-center gap-2 px-3 py-2.5">
                     <CoverageBadge coverage={i.coverage} />
-                    {i.commitment}
+                    {i.riskLevel === "high" && <RiskBadge level="high" />}
+                    <span className="font-medium">{i.commitment}</span>
                   </li>
                 ))}
               </ul>
             )}
             {d!.gate.reviewTaskId && (
-              <Link href={`/reviews/${encodeURIComponent(d!.gate.reviewTaskId)}`} className="inline-block text-primary hover:underline" onClick={close}>
-                Open the review
+              <Link href={`/reviews/${encodeURIComponent(d!.gate.reviewTaskId)}`} className="pg-link inline-block" onClick={close}>
+                Open the review →
               </Link>
             )}
           </section>
 
-          <p className="text-muted">
-            Recipient: <span className="text-foreground">{d!.signerEmail ?? "no signer set on the quote"}</span> · Status: {d!.quoteStatus ?? "unknown"}
-          </p>
+          <dl className="grid grid-cols-2 gap-3 rounded-xl border border-border p-4">
+            <div className="min-w-0">
+              <dt className="pg-eyebrow">Recipient</dt>
+              <dd className="mt-1 truncate font-medium">{d!.signerEmail ?? "No signer set on the quote"}</dd>
+            </div>
+            <div>
+              <dt className="pg-eyebrow">Status</dt>
+              <dd className="mt-1 font-medium capitalize">{d!.quoteStatus ?? "unknown"}</dd>
+            </div>
+          </dl>
 
           <div>
-            <label htmlFor="send-message" className="block font-medium">
-              Message to the buyer (optional)
+            <label htmlFor="send-message" className="pg-label">
+              Message to the buyer <span className="font-normal text-muted">(optional)</span>
             </label>
             <textarea id="send-message" className={fieldClass} rows={3} maxLength={2000} value={message} onChange={(e) => setMessage(e.target.value)} />
           </div>
 
           {!clear && d!.gate.state !== "closed" && (
-            <div className="space-y-2 rounded-md border border-conflict/30 bg-conflict-soft p-3">
-              <p className="font-medium text-conflict">The gate is not clear. Resolve the open items, or override with a reason.</p>
+            <div className="space-y-3 rounded-xl border border-conflict/25 bg-conflict-soft p-4">
+              <p className="font-semibold text-conflict">The gate is not clear. Resolve the open items, or override with a reason.</p>
               {!showOverride ? (
                 <Button variant="secondary" onClick={() => setShowOverride(true)}>
                   Override the gate
                 </Button>
               ) : (
-                <>
-                  <label htmlFor="override-reason" className="block font-medium">
-                    Why send anyway? (at least 10 characters, saved as a Graph8 deal note)
+                <div>
+                  <label htmlFor="override-reason" className="pg-label text-conflict">
+                    Why send anyway? <span className="font-normal">(at least 10 characters, saved as a Graph8 deal note)</span>
                   </label>
                   <textarea
                     id="override-reason"
@@ -145,23 +169,21 @@ export function SendDialog({ quoteId, open, onClose }: { quoteId: string; open: 
                     value={override}
                     onChange={(e) => setOverride(e.target.value)}
                   />
-                </>
+                </div>
               )}
             </div>
           )}
 
           {isDemo ? (
-            <p className="rounded-md bg-missing-soft p-3 text-missing">
-              Demo quote: PromiseGuard calls Graph8&apos;s send preview, which renders the exact email and sends nothing.
-            </p>
+            <Notice tone="missing">Demo quote: PromiseGuard calls Graph8&apos;s send preview, which renders the exact email and sends nothing.</Notice>
           ) : (
-            <label className="flex items-start gap-2 rounded-md border border-border p-3">
-              <input type="checkbox" className="mt-0.5" checked={acknowledged} onChange={(e) => setAcknowledged(e.target.checked)} />
+            <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-border p-4 transition hover:bg-background">
+              <input type="checkbox" className="pg-check mt-0.5" checked={acknowledged} onChange={(e) => setAcknowledged(e.target.checked)} />
               <span>I understand Graph8 will email this quote to {d!.signerEmail ?? "the signer"} for e-signature.</span>
             </label>
           )}
 
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 border-t border-border pt-5">
             <Button onClick={send} disabled={!canSend || busy} variant={clear ? "primary" : "danger"}>
               {busy ? "Working…" : isDemo ? "Preview the send in Graph8" : clear ? "Send quote" : "Override and send"}
             </Button>
@@ -169,11 +191,7 @@ export function SendDialog({ quoteId, open, onClose }: { quoteId: string; open: 
               Cancel
             </Button>
           </div>
-          {error && (
-            <p role="alert" className="text-conflict">
-              {error}
-            </p>
-          )}
+          {error && <ErrorPanel message={error} />}
         </div>
       )}
     </Drawer>

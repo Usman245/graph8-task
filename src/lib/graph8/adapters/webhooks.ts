@@ -12,7 +12,7 @@ const WebhookDto = z.object({
   is_active: z.boolean().nullish(),
 });
 
-export type Webhook = { id: string; name: string | null; url: string; events: string[]; active: boolean };
+type Webhook = { id: string; name: string | null; url: string; events: string[]; active: boolean };
 
 export async function listWebhooks(): Promise<Webhook[]> {
   const operation = "list webhooks";

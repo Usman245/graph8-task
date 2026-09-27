@@ -7,6 +7,7 @@ import { createSubtask, getTask, listSubtasks, patchTask, type Task } from "@/li
 import { executeWorkflow, getExecution, listRecentExecutions } from "@/lib/graph8/adapters/workflows";
 import { Graph8Error } from "@/lib/graph8/errors";
 import { withLock } from "./lock";
+import { discoveryComplete, discoveryKeys, evidenceFingerprint } from "./freshness";
 import { DEMO_TITLE_PREFIX, REVIEW_TAG, REVIEW_TITLE_PREFIX, issueMarkerLine, parseIssueMarker } from "./manifest";
 import { assertQuoteEligible } from "./matching";
 import { assertDealMatchesMode } from "./mode";
@@ -15,7 +16,7 @@ import { MODEL_OUTPUT_SCHEMA, PROMPT_VERSION } from "./prompt";
 import { createReviewTask, findReviewByRequestId, loadReview, requireEditable, saveManifest } from "./repository";
 import { SAMPLE_LABEL } from "./sample-data";
 import { refKey, summarize, type EvidenceDocument, type Finding, type Mode, type QuoteDocument, type ReviewManifest, type SourceRef } from "./schemas";
-import { loadSource, type LoadedSource } from "./sources";
+import { findSourceCandidates, loadSource, type LoadedSource } from "./sources";
 import { validateModelOutput } from "./validate-evidence";
 
 type Evidence = {
@@ -109,7 +110,7 @@ function workflowId(): string {
   return id;
 }
 
-export type StartInput = {
+type StartInput = {
   dealId: string;
   quoteId: string;
   sourceRefs: SourceRef[];
@@ -117,6 +118,10 @@ export type StartInput = {
   requestId: string;
   mode: Mode;
   previousReviewTaskId?: string | null;
+  trigger?: "user" | "manual" | "webhook" | "scan";
+  triggerEvent?: string;
+  /** Server-generated autopilot preflight; never accepted from the browser. */
+  expectedFingerprint?: string;
 };
 
 export async function startReview(input: StartInput): Promise<{ reviewTaskId: string; executionId: string | null; recovered: boolean }> {
@@ -128,7 +133,13 @@ export async function startReview(input: StartInput): Promise<{ reviewTaskId: st
 
     const deal = await getDeal(input.dealId);
     const refs = dedupeRefs(input.sourceRefs);
+    const scan = await findSourceCandidates(deal, input.mode);
     const ev = await prepareEvidence(deal, input.quoteId, refs, input.mode, input.matchConfirmed);
+    const hashes = Object.fromEntries(ev.sources.map((s) => [refKey(s.ref), sourceHash(s.documents)]));
+    const discoveredSourceKeys = discoveryKeys(scan);
+    if (input.expectedFingerprint && (!discoveryComplete(scan) || input.expectedFingerprint !== evidenceFingerprint(ev.quoteDoc.versionHash, hashes, discoveredSourceKeys, input.mode))) {
+      throw new AppRequestError("evidence_changed", "Evidence changed while the review was starting. Review again using the current sources.", 409);
+    }
     const wf = workflowId();
 
     const initial: ReviewManifest = {
@@ -144,7 +155,9 @@ export async function startReview(input: StartInput): Promise<{ reviewTaskId: st
       quoteLabel: ev.quoteDoc.label,
       sourceRefs: refs,
       sourceLabels: Object.fromEntries(ev.sources.map((s) => [refKey(s.ref), s.label])),
-      sourceHashes: Object.fromEntries(ev.sources.map((s) => [refKey(s.ref), sourceHash(s.documents)])),
+      sourceHashes: hashes,
+      discoveredSourceKeys,
+      discoveryComplete: discoveryComplete(scan),
       quoteHash: ev.quoteDoc.versionHash,
       quoteTextComplete: ev.quoteDoc.textComplete,
       quoteIncludedFields: ev.quoteDoc.includedFields,
@@ -163,6 +176,8 @@ export async function startReview(input: StartInput): Promise<{ reviewTaskId: st
       coverageComplete: false,
       coverageNotes: ev.quoteDoc.limitations,
       previousReviewTaskId: input.previousReviewTaskId ?? null,
+      trigger: input.trigger ?? "user",
+      ...(input.triggerEvent ? { triggerEvent: input.triggerEvent } : {}),
       createdAt: new Date().toISOString(),
       completedAt: null,
     };
@@ -300,6 +315,7 @@ export async function finalizeReview(taskId: string): Promise<FinalizeResult> {
       documents[d.id] = { source: labels[refKey(d.parent)] ?? refKey(d.parent), speaker: d.speaker, side: d.speakerSide, at: d.occurredAt, synthetic: d.synthetic };
     }
     const notes = [...ev.quoteDoc.limitations];
+    if (!m.discoveryComplete) notes.push("Source discovery was incomplete. Recheck when all evidence can be read.");
     if (v.truncated) notes.push("The model reported more findings than could be included.");
     if (v.rejected.length) notes.push(`${v.rejected.length} finding(s) were rejected because their evidence could not be verified.`);
     if (m.mode === "demo") notes.push(`Sales evidence is the ${SAMPLE_LABEL.toLowerCase()} (synthetic), not a Graph8 email or transcript.`);
@@ -312,7 +328,7 @@ export async function finalizeReview(taskId: string): Promise<FinalizeResult> {
       rejected: v.rejected,
       truncated: v.truncated,
       documents,
-      coverageComplete: ev.quoteDoc.textComplete && !v.truncated && v.rejected.length === 0,
+      coverageComplete: m.discoveryComplete === true && ev.quoteDoc.textComplete && !v.truncated && v.rejected.length === 0,
       coverageNotes: notes,
       completedAt: new Date().toISOString(),
     });
@@ -379,7 +395,11 @@ export async function getReviewView(taskId: string, opts: { checkFreshness?: boo
     try {
       const deal = await getDeal(m.dealId);
       const ev = await prepareEvidence(deal, m.quoteId, m.sourceRefs, m.mode, m.matchConfirmed);
-      const same = ev.quoteDoc.versionHash === m.quoteHash && ev.sources.every((s) => sourceHash(s.documents) === m.sourceHashes[refKey(s.ref)]);
+      const scan = await findSourceCandidates(deal, m.mode);
+      if (!discoveryComplete(scan)) throw new AppRequestError("discovery_incomplete", "Source discovery is incomplete.", 409);
+      const hashes = Object.fromEntries(ev.sources.map((s) => [refKey(s.ref), sourceHash(s.documents)]));
+      const same = m.discoveredSourceKeys && m.discoveryComplete && m.promptVersion === PROMPT_VERSION &&
+        evidenceFingerprint(ev.quoteDoc.versionHash, hashes, discoveryKeys(scan), m.mode) === evidenceFingerprint(m.quoteHash, m.sourceHashes, m.discoveredSourceKeys, m.mode);
       freshness = same ? "current" : "changed";
     } catch {
       freshness = "unknown";
@@ -533,7 +553,6 @@ export async function updateIssue(
   });
 }
 
-/** New comparison against current versions of the same quote and sources; history is kept. */
 export async function recheckReview(taskId: string, requestId: string) {
   const { manifest: m } = requireEditable(await loadReview(taskId));
   return startReview({

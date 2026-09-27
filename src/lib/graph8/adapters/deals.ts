@@ -21,6 +21,8 @@ const DealDto = z.object({
   owner_name: z.string().nullish(),
   updated_at: z.string().nullish(),
   contacts: z.array(ContactBrief).nullish(),
+  // The list endpoint returns contacts: null but fills primary_contact (verified 2026-09-26).
+  primary_contact: ContactBrief.nullish(),
 });
 
 const Pagination = z.object({ page: z.number(), limit: z.number(), total: z.number(), has_next: z.boolean() });
@@ -49,7 +51,7 @@ function toDeal(d: z.infer<typeof DealDto>): Deal {
     companyId: d.company_id != null ? String(d.company_id) : null,
     ownerName: d.owner_name ?? null,
     updatedAt: d.updated_at ?? null,
-    contacts: (d.contacts ?? []).map((c) => ({
+    contacts: (d.contacts ?? (d.primary_contact ? [d.primary_contact] : [])).map((c) => ({
       id: String(c.id),
       name: c.name ?? null,
       email: c.email?.trim().toLowerCase() ?? null,

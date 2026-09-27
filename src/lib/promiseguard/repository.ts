@@ -5,13 +5,12 @@ import { createTask, getTask, listDealTasks, patchTask, type Task } from "@/lib/
 import { Graph8Error } from "@/lib/graph8/errors";
 import { REVIEW_TAG, buildDescription, manifestBytes, parseDescription, reviewTitle } from "./manifest";
 import { openFindings } from "./gate-rules";
-import { refKey, summarize, type ReviewManifest, type SummaryCounts } from "./schemas";
+import { refKey, summarize, type ReviewManifest, type SummaryCounts, type SourceRef } from "./schemas";
 
-export type LoadedReview = { task: Task; manifest: ReviewManifest | null; readOnlyReason: string | null };
+type LoadedReview = { task: Task; manifest: ReviewManifest | null; readOnlyReason: string | null };
 
 const isReviewTask = (t: Task) => t.tags.includes("promiseguard-review") || /^\[PromiseGuard( Demo)?\] Review /.test(t.title);
 
-/** Load a review task and validate that it is ours and consistent with its manifest. */
 export async function loadReview(taskId: string): Promise<LoadedReview> {
   let task: Task;
   try {
@@ -42,10 +41,7 @@ export function requireEditable(r: LoadedReview): { task: Task; manifest: Review
   return { task: r.task, manifest: r.manifest };
 }
 
-/**
- * Conditional save: Graph8 rejects with 409 if the task changed since `task.updatedAt`.
- * Refuses (rather than truncating) when the report exceeds the configured size limit.
- */
+/** Conditional save (Graph8 returns 409 if the task changed); oversized reports are refused, never truncated. */
 export async function saveManifest(task: Task, next: ReviewManifest): Promise<{ task: Task; manifest: ReviewManifest }> {
   const manifest: ReviewManifest = { ...next, reviewTaskId: task.id, revision: next.revision + 1 };
   const bytes = manifestBytes(manifest);
@@ -90,16 +86,22 @@ export type ReviewSummary = {
   sourceCount: number;
   createdAt: string | null;
   counts: SummaryCounts | null;
-  /** False when findings were rejected, truncated, or the quote text was incomplete. */
   coverageComplete: boolean | null;
   readOnly: boolean;
   quoteId: string | null;
-  /** Content hash of the quote version that was reviewed. */
   quoteHash: string | null;
   sourceKeys: string[];
+  sourceRefs: SourceRef[];
+  sourceHashes: Record<string, string>;
+  discoveredSourceKeys: string[] | null;
+  discoveryComplete: boolean;
+  promptVersion: string | null;
   /** Blocking findings not yet dismissed or resolved (null until the report exists). */
   open: number | null;
   runError: string | null;
+  trigger: ReviewManifest["trigger"] | null;
+  triggerEvent: string | null;
+  completedAt: string | null;
 };
 
 export async function listReviewSummaries(dealId: string): Promise<{ items: ReviewSummary[]; partial: boolean }> {
@@ -124,8 +126,16 @@ export async function listReviewSummaries(dealId: string): Promise<{ items: Revi
       quoteId: m?.quoteId ?? null,
       quoteHash: m?.quoteHash ?? null,
       sourceKeys: m ? m.sourceRefs.map(refKey).sort() : [],
+      sourceRefs: m?.sourceRefs ?? [],
+      sourceHashes: m?.sourceHashes ?? {},
+      discoveredSourceKeys: m?.discoveredSourceKeys ?? null,
+      discoveryComplete: m?.discoveryComplete === true,
+      promptVersion: m?.promptVersion ?? null,
       open: m?.report ? openFindings(m).length : null,
       runError: m?.runError?.message ?? null,
+      trigger: m?.trigger ?? null,
+      triggerEvent: m?.triggerEvent ?? null,
+      completedAt: m?.completedAt ?? null,
     });
   }
   items.sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));

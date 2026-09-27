@@ -11,7 +11,7 @@ import {
   type QuoteDocument,
 } from "./schemas";
 
-export type ValidationResult =
+type ValidationResult =
   | {
       ok: true;
       findings: Finding[];
@@ -30,11 +30,8 @@ const FOLD: Record<string, string> = {
   " ": " ",
 };
 
-/**
- * Find `excerpt` in `text`. Exact match first; otherwise a match that ignores only whitespace
- * runs and typographic quote/dash variants. Offsets always refer to the original text.
- */
-export function locateExcerpt(text: string, excerpt: string): { start: number; end: number } | null {
+/** Exact match first, then one ignoring only whitespace runs and quote/dash variants. Offsets refer to the original text. */
+function locateExcerpt(text: string, excerpt: string): { start: number; end: number } | null {
   const needle = excerpt.trim();
   if (!needle) return null;
   const exact = text.indexOf(needle);
@@ -186,6 +183,19 @@ export function validateModelOutput(input: {
       salesEvidence: sales,
       quoteEvidence: quoteCites,
       suggestedAction: f.suggested_action.trim(),
+      ...(f.commercial_risk
+        ? {
+            commercialRisk: {
+              level: f.commercial_risk.level,
+              riskTypes: f.commercial_risk.risk_types,
+              reason: f.commercial_risk.reason.trim(),
+              missingInformation: f.commercial_risk.missing_information.map((item) => item.trim()).filter(Boolean),
+              recommendedClause: f.commercial_risk.recommended_clause.trim(),
+              // Enforce the documented rule even if the model returns an inconsistent boolean.
+              requiresApproval: f.commercial_risk.level === "high",
+            },
+          }
+        : {}),
     });
   }
 

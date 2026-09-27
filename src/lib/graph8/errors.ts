@@ -1,4 +1,4 @@
-export type Graph8ErrorCode =
+type Graph8ErrorCode =
   | "not_configured"
   | "unauthorized"
   | "forbidden"

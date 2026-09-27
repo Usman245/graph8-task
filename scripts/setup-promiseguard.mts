@@ -4,7 +4,7 @@
 // Usage: node scripts/setup-promiseguard.mts <step...>
 //   users     list org users (for PROMISEGUARD_ASSIGNEES and the demo deal owner)
 //   records   demo companies, contacts, deals, and draft quotes for every scenario ("[PromiseGuard Demo]" prefix)
-//             records:<key> limits it to one scenario (acme, northwind, globex, lakeside)
+//             records:<key> limits it to one scenario (bakery, cafe, gym, dental)
 //   skill     comparison LLM skill
 //   workflow  workflow that runs the skill (validated before save)
 //   all       records + skill + workflow
@@ -45,25 +45,9 @@ type State = {
   workflowId?: string | number;
   webhookId?: string;
   updatedAt?: string;
-  // Legacy single-scenario fields (Acme), migrated into scenarios.acme on load.
-  companyId?: number;
-  contactId?: number;
-  dealId?: string;
-  quoteId?: string;
 };
 
 const state: State = existsSync(STATE_FILE) ? JSON.parse(readFileSync(STATE_FILE, "utf8")) : {};
-if (state.dealId && !state.scenarios?.acme) {
-  state.scenarios = {
-    ...state.scenarios,
-    acme: { companyId: state.companyId, contactId: state.contactId, dealId: state.dealId, quotes: state.quoteId ? { main: state.quoteId } : {} },
-  };
-}
-delete state.companyId;
-delete state.contactId;
-delete state.dealId;
-delete state.quoteId;
-
 function save() {
   mkdirSync("graph8", { recursive: true });
   state.updatedAt = new Date().toISOString();
@@ -80,7 +64,6 @@ async function users() {
 }
 
 async function records(only?: string) {
-  // Owner: explicit env, else the first team member.
   if (!state.ownerUserId) {
     const items = await users();
     const owner = process.env.PROMISEGUARD_DEMO_OWNER_ID || items[0]?.id;
@@ -118,7 +101,6 @@ async function scenarioRecords(sc: DemoScenario, st: ScenarioState) {
     save();
   } else console.log(`contact: reuse id=${st.contactId}`);
 
-  // Deal: stored ID, else search by exact name.
   if (st.dealId && !(await exists(`/deals/${st.dealId}`, "read demo deal"))) st.dealId = undefined;
   if (!st.dealId) {
     const list = await g8("GET", "/deals", { operation: "search deals", query: { page: 1, limit: 100, search: sc.deal.name } });
@@ -176,10 +158,7 @@ async function scenarioRecords(sc: DemoScenario, st: ScenarioState) {
   }
 }
 
-/**
- * Billing details Graph8 requires before a quote can be previewed or sent (verified 2026-09-26:
- * QUOTE_BILLING_FIELDS_REQUIRED for billing_email and billing_address). Reserved example addresses only.
- */
+/** Graph8 requires billing email and address before a quote can be previewed or sent. Reserved example addresses only. */
 function demoBilling(sc: DemoScenario) {
   return {
     billing_legal_name: sc.company.name,
@@ -188,10 +167,7 @@ function demoBilling(sc: DemoScenario) {
   };
 }
 
-/**
- * Keep demo quote terms in sync with sample-data.ts (this also restores terms edited by "Fix in quote")
- * and fill missing billing details. Only drafts are edited; a sent quote is never recalled.
- */
+/** Restores demo quote terms and billing from sample-data.ts. Only drafts are edited; a sent quote is never recalled. */
 async function syncDraftTerms(q: DemoScenario["quotes"][number], quoteId: string, sc: DemoScenario) {
   const current = (await g8("GET", `/quotes/${quoteId}`, { operation: "read demo quote" }))?.data;
   const billing = demoBilling(sc);

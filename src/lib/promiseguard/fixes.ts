@@ -17,7 +17,6 @@ export type ReviewQuote = {
   status: string | null;
   termsContent: string;
   editable: boolean;
-  /** Saving would recall a sent quote to draft and void its live signing link. */
   recallsSentQuote: boolean;
   reason: string | null;
 };

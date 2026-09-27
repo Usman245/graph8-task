@@ -4,6 +4,9 @@ import { guardBoard, needsReview, runAutoReview } from "@/lib/promiseguard/guard
 import { currentMode } from "@/lib/promiseguard/mode";
 import { ScanBody } from "@/lib/promiseguard/requests";
 
+// Allows the background finalize watcher (next/server after()) to finish on serverless hosts.
+export const maxDuration = 60;
+
 const MAX_PER_SCAN = 5;
 
 // Manual stand-in for the webhook: reviews quotes that are unreviewed or changed. Uses AI credits per started review.
